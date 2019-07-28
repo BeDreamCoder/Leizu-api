@@ -148,8 +148,8 @@ module.exports.instantiateChaincode = async function (peers, channelName, chainc
     }
 
     if (!error_message) {
-        let message = util.format('Successfully instantiate chaincode in organization \'%s\' to the ' +
-            'channel \'%s\'', org.name, channelName);
+        let message = util.format('Successfully instantiate chaincode \'%s:%s\' in organization \'%s\' to the ' +
+            'channel \'%s\'', chaincodeName, chaincodeVersion, org.name, channelName);
         logger.info(message);
         return message;
     } else {

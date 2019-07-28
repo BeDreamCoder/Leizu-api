@@ -10,10 +10,18 @@ const mongoose = require('mongoose');
 const consortiumSchema = new mongoose.Schema({
     uuid: String,
     name: String,
+    mode: {
+        type: String,
+        default: 'bare'
+    },
+    network: String,
     type: {
         type: String,
-        default: "fabric"
+        default: 'fabric'
     },
+    version: String,
+    normal_instance_limit: Number,
+    high_instance_limit: Number,
     synced: {
         type: Boolean,
         default: false
@@ -22,7 +30,7 @@ const consortiumSchema = new mongoose.Schema({
     request_id: mongoose.Schema.ObjectId,
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 });
 

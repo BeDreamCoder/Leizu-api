@@ -13,7 +13,7 @@ const token = 'Bearer ' + constants.token;
 
 const channel = {
     channelId: constants.channelId,
-    organizationId: constants.organizationId,
+    organizationIds: [constants.organizationId],
 };
 
 request(app.callback())

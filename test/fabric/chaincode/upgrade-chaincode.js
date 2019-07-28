@@ -13,16 +13,17 @@ const token = 'Bearer ' + constants.token;
 
 const chaincode = {
     chaincodeId: constants.chaincodeId,
-    channelId: constants.channelId,
-    args: ['a', '100', 'b', '200']
+    channelIds: [constants.channelId],
+    args: ['a', '100', 'b', '200'],
+    policyType: 'majority'
 };
 
 request(app.callback())
-.post('/api/v1/chaincode/upgrade')
-.set('Authorization', token)
-.send(chaincode)
-.end(function (err, response) {
-    if (err) console.error(err);
-    console.log(response.body);
-    app.mongoose.disconnect();
-});
+    .post('/api/v1/chaincode/upgrade')
+    .set('Authorization', token)
+    .send(chaincode)
+    .end(function (err, response) {
+        if (err) console.error(err);
+        console.log(response.body);
+        app.mongoose.disconnect();
+    });

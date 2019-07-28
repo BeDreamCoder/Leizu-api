@@ -6,11 +6,15 @@ SPDX-License-Identifier: Apache-2.0
 
 'use strict';
 
+const fs = require('fs');
+const path = require('path');
+const utils = require('../../libraries/utils');
 const common = require('../../libraries/common');
 const DbService = require('../../services/db/dao');
 const OrganizationService = require('../../services/fabric/organization');
 const router = require('koa-router')({prefix: '/organization'});
-
+const send = require('koa-send');
+const archiver = require('archiver');
 const {BadRequest} = require('../../libraries/error');
 const Validator = require('../../libraries/validator/validator');
 const Schema = require('../../libraries/validator/schema/organization-shcema');
@@ -61,6 +65,43 @@ router.get('/:consortiumId', async ctx => {
     }
 });
 
+router.get('/download/certificate', async ctx => {
+    let id = ctx.query.id;
+    let type = parseInt(ctx.query.type);
+    try {
+        let organization = await DbService.findOrganizationById(id);
+        if (!organization) {
+            throw new Error('The organization does not exist: ' + id);
+        }
+        let archive = archiver('zip', {
+            zlib: {level: 9}
+        });
+        let zipName;
+        if (type === common.DOWNLOAD_ENTERPRISE_CERT) {
+            let fileName = `${organization.name}-enterprise-certificate`;
+            zipName = `download/${fileName}.zip`;
+            let zipStream = fs.createWriteStream(zipName);
+            archive.pipe(zipStream);
+            archive.append(Buffer.from(organization.admin_key), {name: `${fileName}/admincerts/cert.pem`});
+            archive.append(Buffer.from(organization.admin_cert), {name: `${fileName}/keystore/private_key`});
+        } else if (type === common.DOWNLOAD_CA_CERT) {
+            let fileName = `${organization.name}-ca-certificate`;
+            zipName = `download/${fileName}.zip`;
+            let zipStream = fs.createWriteStream(zipName);
+            archive.pipe(zipStream);
+            archive.append(Buffer.from(organization.root_cert), {name: `${fileName}/tlscacerts/cert.pem`});
+        } else {
+            throw new Error('Invalid certificate type.');
+        }
+        await archive.finalize();
+        ctx.attachment(zipName);
+        await send(ctx, zipName);
+    } catch (err) {
+        ctx.status = 400;
+        ctx.body = common.error([], err.message);
+    }
+});
+
 router.get('/:consortiumId/:id', async ctx => {
     let id = ctx.params.id;
     let consortiumId = ctx.params.consortiumId;
@@ -74,10 +115,17 @@ router.get('/:consortiumId/:id', async ctx => {
 });
 
 router.post('/', async ctx => {
-    let res = Validator.JoiValidate('create organization', ctx.request.body, Schema.newOrganizationSchema);
+    let params = ctx.request.body;
+    let res;
+    if (params.mode === common.RUNMODE_CLOUD) {
+        res = Validator.JoiValidate('create organization', params, Schema.cloudOrganizationSchema);
+    } else {
+        res = Validator.JoiValidate('create organization', params, Schema.bareOrganizationSchema);
+    }
     if (!res.result) throw new BadRequest(res.errMsg);
     try {
-        let organization = await OrganizationService.create(ctx.request.body);
+        params = await OrganizationService.handleAlicloud(params);
+        let organization = await OrganizationService.create(params);
         ctx.body = common.success({
             _id: organization._id,
             name: organization.name,

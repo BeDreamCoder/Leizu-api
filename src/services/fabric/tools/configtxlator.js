@@ -104,12 +104,12 @@ var Configtxlator = class {
         return Configtxlator.postFormRequest(url, formData);
     }
 
-    async upload(consortiumId, orgName, archive) {
+    async upload(destination, archive) {
         var url = this.endpoint.concat('/configtxlator/upload');
         logger.debug('Upload msp files %s, request url: %s', archive, url);
 
         const formData = {
-            destination: `./data/${consortiumId}/${orgName}/`,
+            destination: destination,
             msp: {
                 value: fs.createReadStream(archive),
                 options: {

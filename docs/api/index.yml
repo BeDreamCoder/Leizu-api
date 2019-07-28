@@ -257,6 +257,35 @@ paths:
           description: Unauthorized
           schema:
             $ref: common.yml#/401Error
+  /organization/download/certificate:
+      get:
+        tags:
+        - organization
+        summary: Download organization certificate
+        security:
+        - ApiKeyAuth: []
+        consumes:
+        - application/json
+        produces:
+        - application/json
+        parameters:
+        - name: id
+          in: query
+          description: organization id
+          required: true
+          type: string
+        - name: type
+          in: query
+          description: certificate type, 1 enterprise certificate, 2 ca certificate
+          required: true
+          type: string
+        responses:
+          200:
+            description: OK
+          401:
+            description: Unauthorized
+            schema:
+              $ref: common.yml#/401Error
   /organization:
     post:
       tags:
@@ -437,25 +466,39 @@ paths:
           description: Unauthorized
           schema:
             $ref: "channel.yml#/Error"
-  /chaincode:
+  /chaincode/{consortiumId}:
     get:
       tags:
       - chaincode
-      - TODO
       summary: List all chaincodes
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - name: consortiumId
+        in: path
+        description: Consortium id
+        required: true
+        type: string
       responses:
         200:
           description: OK
-  /chaincode/{chaincodeId}:
+          schema:
+            $ref: "chaincode.yml#/ListResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/status/{chaincodeId}:
     get:
       tags:
       - chaincode
-      - TODO
-      summary: Show chaincode details
+      summary: Show chaincode status
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
@@ -469,71 +512,283 @@ paths:
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/StatusResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/record/{consortiumId}:
+    get:
+      tags:
+      - chaincode
+      summary: All chaincode operation records
+      security:
+      - ApiKeyAuth: []
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - name: consortiumId
+        in: path
+        description: Consortium id
+        required: true
+        type: string
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "chaincode.yml#/RecordResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/record-cc/{chaincodeId}:
+    get:
+      tags:
+      - chaincode
+      summary: The specified chaincode operation records
+      security:
+      - ApiKeyAuth: []
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - name: chaincodeId
+        in: path
+        description: Chaincode id
+        required: true
+        type: string
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "chaincode.yml#/RecordResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/peers/{chaincodeId}:
+    get:
+      tags:
+      - chaincode
+      summary: Show can be installed chaincode peers
+      security:
+      - ApiKeyAuth: []
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - name: chaincodeId
+        in: path
+        description: Chaincode id
+        required: true
+        type: string
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "chaincode.yml#/PeersResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/channel/{chaincodeId}:
+    get:
+      tags:
+      - chaincode
+      summary: Show can be deployed or upgraded channels
+      security:
+      - ApiKeyAuth: []
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - name: chaincodeId
+        in: path
+        description: Chaincode id
+        required: true
+        type: string
+      - in: query
+        name: type
+        description: deploy or upgrade
+        required: true
+        type: string
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "chaincode.yml#/ChannelResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
+  /chaincode/upload:
+    post:
+      tags:
+      - chaincode
+      summary: Upload chaincode
+      security:
+      - ApiKeyAuth: []
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Upload chaincode files
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Upload"
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "chaincode.yml#/UploadResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /chaincode/install:
     post:
       tags:
       - chaincode
-      - TODO
       summary: Install chaincode
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Install chaincode to peers
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Install"
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/InstallResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /chaincode/instantiate:
     post:
       tags:
       - chaincode
-      - TODO
       summary: Instantiate chaincode
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Instantiate chaincode to channel
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Instantiate"
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/InstantiateResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /chaincode/upgrade:
     post:
       tags:
       - chaincode
-      - TODO
       summary: Upgrade chaincode
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Upgrade chaincode to channel
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Instantiate"
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/InstantiateResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /chaincode/invoke:
     post:
       tags:
       - chaincode
-      - TODO
       summary: Invoke chaincode
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Invoke chaincode
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Invoke"
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/InvokeResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /chaincode/query:
-    get:
+    post:
       tags:
       - chaincode
-      - TODO
       summary: Query chaincode
+      security:
+      - ApiKeyAuth: []
       consumes:
       - application/json
       produces:
       - application/json
+      parameters:
+      - in: body
+        name: chaincode
+        description: Invoke chaincode
+        required: true
+        schema:
+          $ref: "chaincode.yml#/Query"
       responses:
         200:
           description: OK
+          schema:
+            $ref: "chaincode.yml#/QueryResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "chaincode.yml#/Error"
   /consortium:
     get:
       tags:

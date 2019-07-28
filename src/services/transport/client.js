@@ -32,6 +32,10 @@ module.exports = class TransportClient {
         return new TransportClient(client);
     }
 
+    async checkImage(name) {
+        return await this.client.checkImage(name);
+    }
+
     async createContainer(parameters) {
         return await this.client.createContainer(parameters);
     }

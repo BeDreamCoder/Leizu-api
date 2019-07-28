@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 const supertest = require('supertest');
 const app = require('../../src/index');
-const request = require('./request-sample-centos');
+const request = require('./request-sample-local');
 
 supertest(app.callback())
     .post('/api/v1/request')

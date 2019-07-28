@@ -10,6 +10,7 @@ const Client = require('../transport/client');
 const common = require('../../libraries/common');
 const utils = require('../../libraries/utils');
 const config = require('../../env');
+const images = require('../../images');
 const consulClient = require('../../services/consul/client');
 
 module.exports = class CAdvisorService {
@@ -21,7 +22,7 @@ module.exports = class CAdvisorService {
         let cAdvisorPort = common.PORT.CADVISOR;
 
         let containerOptions = {
-            image: config.network.cadvisor.availableImages[0],
+            image: images.middleware.cadvisor,
             cAdvisorName,
             port: cAdvisorPort,
         };
@@ -34,6 +35,7 @@ module.exports = class CAdvisorService {
 
         const client = Client.getInstance(connectionOptions);
         const parameters = utils.generateCadvisorContainerOptions(containerOptions);
+        await client.checkImage(containerOptions.image);
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${cAdvisorPort}`);
         if (!container) {
@@ -41,13 +43,14 @@ module.exports = class CAdvisorService {
         }
 
         let consulOptions = {
-            image: config.network.consul.availableImages[0],
+            image: images.middleware.consul,
             consulName,
             host: host,
             consulServer: process.env.PROMETHEUS_HOST || config.prometheus.host
         };
         let consulPort = common.PORT.CONSUL_PORT;
         const consulParameters = utils.generateConsulContainerOptions(consulOptions);
+        await client.checkImage(consulOptions.image);
         const consulContainer = await client.createContainer(consulParameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${consulPort}`);
         if (!consulContainer) {
@@ -56,12 +59,13 @@ module.exports = class CAdvisorService {
             await this.registerService(params);
         }
         let filebeatOptions = {
-            image: config.network.filebeat.availableImages[0],
+            image: images.middleware.filebeat,
             filebeatName: `filebeat-${host.replace(/\./g, '-')}`,
             elasticsearchHost: process.env.ELASTICSEARCH_HOST ||
-            `${config.elasticsearch.host}:${config.elasticsearch.port}`,
+                `${config.elasticsearch.host}:${config.elasticsearch.port}`,
         };
         const filebeatParameters = utils.generateFileBeatContainerOptions(filebeatOptions);
+        await client.checkImage(filebeatOptions.image);
         const filebeatContainer = await client.createContainer(filebeatParameters);
         if (!filebeatContainer) {
             throw new Error('create filebeat server failed');

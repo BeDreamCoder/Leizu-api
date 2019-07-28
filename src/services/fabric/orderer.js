@@ -5,18 +5,16 @@ SPDX-License-Identifier: Apache-2.0
 */
 
 'use strict';
-const fs = require('fs');
-const path = require('path');
 const {HFCAIdentityType} = require('fabric-ca-client/lib/IdentityService');
 const utils = require('../../libraries/utils');
 const config = require('../../env');
+const images = require('../../images');
 const common = require('../../libraries/common');
 const CredentialHelper = require('./tools/credential-helper');
 const CryptoCaService = require('./tools/crypto-ca');
 const DbService = require('../db/dao');
 const Client = require('../transport/client');
-const ConfigTxlator = require('./tools/configtxlator');
-const CreateConfigTx = require('./tools/configtxgen');
+const etcdctl = require('../coredns/etcdctl');
 
 module.exports = class OrdererService {
 
@@ -29,29 +27,27 @@ module.exports = class OrdererService {
     }
 
     static async create(params) {
-        const {organizationId, image, username, password, host, port, options} = params;
+        const {organizationId, image, username, password, host, port} = params;
 
         const org = await DbService.findOrganizationById(organizationId);
         const consortium = await DbService.getConsortiumById(org.consortium_id);
-        let ordererNamePrefix = 'orderer';
-        if(params.name){
-            ordererNamePrefix = params.name;
-        }
-        const ordererName = `${ordererNamePrefix}-${host.replace(/\./g, '-')}`;
-        const ordererPort = common.PORT.ORDERER;
-        let ordererHome = common.ORDERER_HOME;
-        if (process.env.RUN_MODE === common.RUN_MODE.LOCAL) {
-            ordererHome = '/tmp'+ordererHome;
+        const ordererName = `${params.name}-${host.replace(/\./g, '-')}`;
+        let ordererPort = params.ordererPort;
+        if (!ordererPort) {
+            ordererPort = common.PORT.ORDERER;
         }
 
+        let cfgPath = process.env.RUN_MODE === common.RUN_MODE.LOCAL ? '/tmp/hyperledger/fabric' : common.FABRIC_CFG_PATH;
         let containerOptions = {
-            image: image || config.network.orderer.availableImages[0],
-            workingDir: `${ordererHome}/${consortium._id}/${org.name}/peers/${ordererName}`,
+            image: images.fabric[consortium.version].orderer,
+            cfgPath: `${cfgPath}/${consortium._id}/${org.name}/peers/${ordererName}`,
+            workDir: `${common.FABRIC_WORKDIR}/orderer`,
             ordererName,
             domainName: org.domain_name,
             mspId: org.msp_id,
             port: ordererPort,
-            enableTls: config.network.orderer.tls,
+            enableTls: config.tlsEnabled,
+            logLevel: config.fabricLogLevel
         };
 
         const connectionOptions = {
@@ -61,13 +57,17 @@ module.exports = class OrdererService {
             port: port || config.ssh.port
         };
 
-        const ordererDto = await this.preContainerStart({org, consortium, ordererName, ordererHome, ordererPort, connectionOptions, options});
+        const ordererDto = await this.preContainerStart(org, consortium, ordererName, containerOptions.cfgPath,
+            connectionOptions, params.certs, params.genesisBlockPath);
 
         const client = Client.getInstance(connectionOptions);
         const parameters = utils.generateOrdererContainerOptions(containerOptions);
+        await client.checkImage(containerOptions.image);
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${ordererPort}`);
         if (container) {
+            await etcdctl.createZone(`${ordererName}.${org.domain_name}`, host);
+
             return await DbService.addOrderer(Object.assign({}, ordererDto, {
                 name: ordererName,
                 organizationId: organizationId,
@@ -79,20 +79,15 @@ module.exports = class OrdererService {
         }
     }
 
-    static async preContainerStart({org, consortium, ordererName, ordererHome, ordererPort, connectionOptions, options}) {
+    static async preContainerStart(org, consortium, ordererName, cfgPath, connectionOptions, ordererDto, genesisBlockPath) {
         await this.createContainerNetwork(connectionOptions);
-        let ordererDto = await this.prepareCerts(org, consortium, ordererName);
-        options.host = connectionOptions.host;
-        const genesisBlockFile = await this.prepareGenesisBlock({org, consortium, ordererName, ordererPort, configtx: options});
 
         const certFile = `${ordererDto.credentialsPath}.zip`;
-        const remoteFile = `${ordererHome}/${consortium._id}/${org.name}/peers/${ordererName}.zip`;
-        const remotePath = `${ordererHome}/${consortium._id}/${org.name}/peers/${ordererName}`;
+        const remoteFile = `${cfgPath}.zip`;
+        const remotePath = cfgPath;
         const client = Client.getInstance(connectionOptions);
         await client.transferFile({local: certFile, remote: remoteFile});
-        await client.transferFile({local: genesisBlockFile, remote: `${remotePath}/genesis.block`});
-
-
+        await client.transferFile({local: genesisBlockPath, remote: `${remotePath}/genesis.block`});
         const bash = Client.getInstance(Object.assign({}, connectionOptions, {cmd: 'bash'}));
         await bash.exec(['-c', `unzip -o ${remoteFile} -d ${remotePath}`]);
         return ordererDto;
@@ -136,55 +131,5 @@ module.exports = class OrdererService {
         ordererDto.tls.cert = tlsInfo.certificate;
         ordererDto.credentialsPath = await CredentialHelper.storePeerCredentials(ordererDto);
         return ordererDto;
-    }
-
-    static async prepareGenesisBlock({org, consortium, ordererName, ordererPort, configtx}) {
-        let addresses = [];
-        if(config.network.orderer.tls){
-            addresses.push(`${ordererName}.${org.domain_name}:${ordererPort}`);
-        }else{
-            addresses.push(`${configtx.host}:${ordererPort}`);
-        }
-        let options = {
-            ConsortiumId: String(consortium._id),
-            Consortium: consortium.name,
-            Orderer: {
-                OrdererType: configtx.ordererType,
-                OrderOrg: org.name,
-                Addresses: addresses,
-                Kafka: {
-                    Brokers: configtx.kafka
-                }
-            },
-            Organizations: [{
-                Name: org.name,
-                MspId: org.msp_id,
-                Type: common.PEER_TYPE_ORDER
-            }]
-        };
-        if (configtx.ordererType === common.CONSENSUS_KAFKA && (!configtx.kafka || configtx.kafka.length === 0)) {
-            throw new Error('kafka config not exists in options');
-        } else {
-            options.Orderer.Kafka.Brokers = configtx.kafka.map((item) => `${item.host}:${item.port}`);
-        }
-        if (!configtx.peerOrgs || configtx.peerOrgs.length === 0) {
-            throw new Error('peerOrgs config not exists in options');
-        } else {
-            configtx.peerOrgs.forEach((peerOrg) => {
-                options.Organizations.push({
-                    Name: peerOrg.name,
-                    MspId: peerOrg.mspId,
-                    Type: common.PEER_TYPE_PEER,
-                    AnchorPeers: [{Host: peerOrg.anchorPeer.host, Port: peerOrg.anchorPeer.port}]
-                });
-            });
-        }
-
-        let configTxYaml = new CreateConfigTx(options).buildConfigtxYaml();
-        let genesis = await ConfigTxlator.outputGenesisBlock(common.CONFIFTX_OUTPUT_GENESIS_BLOCK, common.SYSTEM_CHANNEL, configTxYaml, '', '');
-        const genesisBlockPath = path.join(config.cryptoConfig.path, String(consortium._id), org.name, 'genesis.block');
-        fs.writeFileSync(genesisBlockPath, genesis);
-
-        return genesisBlockPath;
     }
 };

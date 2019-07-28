@@ -1,0 +1,305 @@
+Error:
+  type: object
+  properties:
+    errors:
+      type: array
+      items:
+        type: object
+        properties:
+          message:
+            type: string
+            example: Token Expired
+ListResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: object
+      properties:
+        _id:
+          type: string
+          example: 5c3554400769596011422c4e
+        desc:
+          type: string
+          example: 示例合约
+        version:
+          type: string
+          example: v1
+        name:
+          type: string
+          example: example_cc
+        peers:
+          type: int
+          example: 1
+        channels:
+          type: int
+          example: 1
+        status:
+          type: int
+          example: 1
+        date:
+          type: string
+          example: 2019-01-09T01:54:07.744Z
+    msg:
+      type: string
+      example: success
+StatusResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: [{"5c34461a8e68234561a357e3":{"peers":["5c3445e48e68234561a357df"],"state":2}}]
+    msg:
+      type: string
+      example: success
+RecordResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: [{"opt":1,"date":"2019-01-09T01:57:35.502Z","_id":"5c3555102943106069c60734","uuid":"effb1720-13b1-11e9-ac44-6b8f2ef967bf","consortium_id":"5c3553c35e8c8e5ff5b346c7","chaincode_id":"5c3554400769596011422c4e","target":"peer0","message":"\"peer0\" successfully installed chaincode \"example_cc:v0\"","__v":0}]
+    msg:
+      type: string
+      example: success
+PeersResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: [{"_id":"5c3b6a51e07c632c2e497f52","name":"peer0"}]
+    msg:
+      type: string
+      example: success
+ChannelResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: [{"mychannel":"5c514f3cb25d00189d115948"},{"mychannel-1":"5c516c7366ef451eff0c3fc9"}]
+    msg:
+      type: string
+      example: success
+Upload:
+  type: object
+  properties:
+    consortiumId:
+      type: string
+      example: 5c3445d18e68234561a357dc
+    chaincodeName:
+      type: string
+      example: example_cc
+    chaincodeVersion:
+      type: string
+      example: v0
+    chaincodeDesc:
+      type: string
+      example: 示例合约
+    chaincode:
+      type: string
+      example: go/example_cc.go
+UploadResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: object
+      properties:
+        date:
+          type: string
+          example: 2018-10-19T01:51:17.844Z
+        _id:
+          type: string
+          example: 5bc9389760dc6449e9a832e7
+        uuid:
+          type: string
+          example: 7909f1f0-d341-11e8-84f0-69f0cc532f0e
+        consortium_id:
+          type: string
+          example: 5c3445d18e68234561a357dc
+        name:
+          type: string
+          example: example_cc
+        path:
+          type: string
+          example: chaincode/example_cc/1546865560220
+        version:
+          type: string
+          example: v0
+        desc:
+          type: string
+          example: 示例合约
+        type:
+          type: string
+          example: golang
+        __v:
+          type: int
+          example: 0
+    msg:
+      type: string
+      example: success
+Install:
+  type: object
+  properties:
+    chaincodeId:
+      type: string
+      example: 5c335117b54b4826f314ff5a
+    peers:
+      type: array
+      items:
+        type: string
+        example: 5bc9389760dc6449e9a832e4
+InstallResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: ['"peer0" successfully installed chaincode "example_cc:v1"']
+    msg:
+      type: string
+      example: success
+Instantiate:
+  type: object
+  properties:
+    chaincodeId:
+      type: string
+      example: 5c335117b54b4826f314ff5a
+    channelIds:
+      type: array
+      items:
+        type: string
+        example: 5bc9389760dc6449e9a832e4
+    args:
+      type: string
+      example: ['a', '100', 'b', '200']
+    policyType:
+      type: string
+      example: majority
+InstantiateResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: object
+      properties:
+        succeed:
+          type: array
+          items:
+            type: string
+            example: mychannel
+        failed:
+          type: array
+          items:
+            type: string
+            example: testchannel
+    msg:
+      type: string
+      example: success
+Invoke:
+  type: object
+  properties:
+    chaincodeId:
+      type: string
+      example: 5c335117b54b4826f314ff5a
+    channelId:
+      type: string
+      example: 5bc9389760dc6449e9a832e4
+    functionName:
+      type: string
+      example: move
+    args:
+      type: array
+      items:
+        type: string
+        example: a
+InvokeResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: e611bb96163597e8ef55b1ff9aecfb1168d7ad1d3d78ea11f5999a6afa62d9db
+    msg:
+      type: string
+      example: success
+Query:
+  type: object
+  properties:
+    chaincodeId:
+      type: string
+      example: 5c335117b54b4826f314ff5a
+    channelId:
+      type: string
+      example: 5bc9389760dc6449e9a832e4
+    functionName:
+      type: string
+      example: query
+    args:
+      type: array
+      items:
+        type: string
+        example: a
+QueryResponse:
+  type: object
+  properties:
+    code:
+      type: int
+      example: 200
+    status:
+      type: string
+      example: success
+    data:
+      type: string
+      example: 90
+    msg:
+      type: string
+      example: success

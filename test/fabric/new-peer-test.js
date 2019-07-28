@@ -12,8 +12,10 @@ const constants = require('./constants');
 const token = 'Bearer ' + constants.token;
 
 const peer = {
+    mode: 'bare',
     organizationId: constants.organizationId,
     peers: [{
+        name: 'peer1',
         image: 'hyperledger/fabric-ca-peer',
         host: '39.106.149.201',
         port: 22,
@@ -22,10 +24,23 @@ const peer = {
     }]
 };
 
+const cloudPeer = {
+    mode: 'cloud',
+    organizationId: constants.organizationId,
+    peers: [{
+        name: 'peer1',
+        image: 'hyperledger/fabric-ca-peer',
+        instanceType: 'normal', // 'high'
+        cloud: 'aliyun',
+        port: 22,
+
+    }]
+};
+
 request(app.callback())
     .post('/api/v1/peer')
     .set('Authorization', token)
-    .send(peer)
+    .send(cloudPeer)
     .end((err, response) => {
         if (err) console.error(err);
         console.log(response.body);

@@ -8,7 +8,7 @@ SPDX-License-Identifier: Apache-2.0
 
 const FabricCAServices = require('fabric-ca-client');
 const User = require('fabric-ca-client/lib/User');
-const { HFCAIdentityAttributes, HFCAIdentityType } = require('fabric-ca-client/lib/IdentityService');
+const {HFCAIdentityAttributes, HFCAIdentityType} = require('fabric-ca-client/lib/IdentityService');
 const common = require('../../../libraries/common');
 const stringUtil = require('../../../libraries/string-util');
 
@@ -21,7 +21,7 @@ module.exports = class CryptoCA {
         this.caService = null;
     }
 
-    init(options){
+    init(options) {
         this.caName = options.caName;
         this.orgName = options.orgName;
         this.url = options.url;
@@ -29,8 +29,8 @@ module.exports = class CryptoCA {
         this.adminUser = options.adminUser || common.ADMINUSER;
     }
 
-    getFabricCaService(){
-        if(this.caService){
+    getFabricCaService() {
+        if (this.caService) {
             return this.caService;
         }
         let name = this.caName;
@@ -43,93 +43,93 @@ module.exports = class CryptoCA {
         return this.caService;
     }
 
-    async bootstrapUserEnrollement(){
-    	let caService = this.getFabricCaService();
-    	try{
-    	    const enrollment = await caService.enroll(this.bootstrapUser);
-            this.bootstrapEnrollment = new User(this.bootstrapUser.enrollmentID);
-    	    await this.bootstrapEnrollment.setEnrollment(enrollment.key, enrollment.certificate, stringUtil.getMspId(this.orgName));
-    	    return this.bootstrapEnrollment;
-    	}catch(err){
-    	    console.error(err);
-    	    return null;
-    	}
-    }
-
-    async addOrgAffiliation(){
+    async bootstrapUserEnrollement() {
+        let caService = this.getFabricCaService();
         try {
-            let caService = this.getFabricCaService();
-            let affiliationService = caService.newAffiliationService();
-            const newAffiliationRequest = {
-    		    name: this.orgName
-    	    };
-            let response = await affiliationService.create(newAffiliationRequest, this.bootstrapEnrollment);
-            return response;
-        }catch(err){
+            const enrollment = await caService.enroll(this.bootstrapUser);
+            this.bootstrapEnrollment = new User(this.bootstrapUser.enrollmentID);
+            await this.bootstrapEnrollment.setEnrollment(enrollment.key, enrollment.certificate, stringUtil.getMspId(this.orgName));
+            return this.bootstrapEnrollment;
+        } catch (err) {
             console.error(err);
             return null;
         }
     }
 
-    async registerAdminUser(hfCAIdentityType){
+    async addOrgAffiliation() {
+        try {
+            let caService = this.getFabricCaService();
+            let affiliationService = caService.newAffiliationService();
+            const newAffiliationRequest = {
+                name: this.orgName
+            };
+            let response = await affiliationService.create(newAffiliationRequest, this.bootstrapEnrollment);
+            return response;
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
+    }
+
+    async registerAdminUser(hfCAIdentityType) {
         try {
             let caService = this.getFabricCaService();
             let attrs = [
-                { name: HFCAIdentityAttributes.HFREGISTRARROLES, value: hfCAIdentityType },
-                { name: HFCAIdentityAttributes.HFREGISTRARATTRIBUTES, value: '*'},
-                { name: HFCAIdentityAttributes.HFREVOKER, value: 'true'},
-                { name: HFCAIdentityAttributes.HFGENCRL, value: 'true'},
-                { name: 'admin', value: 'true:ecert'},
-                { name: 'abac.init', value: 'true:ecert'}
+                {name: HFCAIdentityAttributes.HFREGISTRARROLES, value: hfCAIdentityType},
+                {name: HFCAIdentityAttributes.HFREGISTRARATTRIBUTES, value: '*'},
+                {name: HFCAIdentityAttributes.HFREVOKER, value: 'true'},
+                {name: HFCAIdentityAttributes.HFGENCRL, value: 'true'},
+                {name: 'admin', value: 'true:ecert'},
+                {name: 'abac.init', value: 'true:ecert'}
             ];
             let identity = {
-        		enrollmentID: this.adminUser.enrollmentID,
-        		enrollmentSecret: this.adminUser.enrollmentSecret,
-        		affiliation: this.orgName,
+                enrollmentID: this.adminUser.enrollmentID,
+                enrollmentSecret: this.adminUser.enrollmentSecret,
+                affiliation: this.orgName,
                 maxEnrollments: -1,
-        		attrs: attrs
-    	    };
+                attrs: attrs
+            };
             let response = await caService.register(identity, this.bootstrapEnrollment);
             return response;
-        }catch(err){
+        } catch (err) {
             console.error(err);
         }
     }
 
-    async registerUser(user){
+    async registerUser(user) {
         try {
             let caService = this.getFabricCaService();
             let attrs = [
-                { name: HFCAIdentityAttributes.HFREGISTRARROLES, value: HFCAIdentityType.CLIENT }
+                {name: HFCAIdentityAttributes.HFREGISTRARROLES, value: HFCAIdentityType.CLIENT}
             ];
             let identity = {
-        		enrollmentID: user.enrollmentID,
-        		enrollmentSecret: user.enrollmentSecret,
-        		affiliation: user.orgName,
-        		maxEnrollments: -1,
-        		attrs: attrs
-    	    };
+                enrollmentID: user.enrollmentID,
+                enrollmentSecret: user.enrollmentSecret,
+                affiliation: user.orgName,
+                maxEnrollments: -1,
+                attrs: attrs
+            };
             let response = await caService.register(identity, this.bootstrapEnrollment);
             return response;
-        }catch(err){
+        } catch (err) {
             console.error(err);
         }
     }
 
-    async enrollUser(user){
-    	let caService = this.getFabricCaService();
-    	try{
-    	    let enrollment = await caService.enroll(user);
-    	    return enrollment;
-    	}catch(err){
-    	    console.error(err);
-    	    return null;
-    	}
+    async enrollUser(user) {
+        let caService = this.getFabricCaService();
+        try {
+            let enrollment = await caService.enroll(user);
+            return enrollment;
+        } catch (err) {
+            console.error(err);
+            return null;
+        }
     }
 
-    async postContainerStart(){
+    async postContainerStart() {
         let result = {};
-        if(!this.bootstrapEnrollment){
+        if (!this.bootstrapEnrollment) {
             await this.bootstrapUserEnrollement();
         }
         await this.addOrgAffiliation();

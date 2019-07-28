@@ -13,6 +13,8 @@ const Peer = require('../../models/peer');
 const Consortium = require('../../models/consortium');
 const CertAuthority = require('../../models/certauthority');
 const Chaincode = require('../../models/chaincode');
+const ChaincodeRecord = require('../../models/chaincode-record');
+const AliCloud = require('../../models/alicloud');
 const Common = require('../../libraries/common');
 
 module.exports = class DbService {
@@ -77,6 +79,11 @@ module.exports = class DbService {
         return consortium;
     }
 
+    static async findConsortiumAndUpdate(id, update) {
+        let consortium = await Consortium.findByIdAndUpdate(id, update);
+        return consortium;
+    }
+
     static async findPeers() {
         let peers = await Peer.find();
         return peers;
@@ -93,6 +100,14 @@ module.exports = class DbService {
         }
         let peer = await Peer.findOne(filter);
         return peer;
+    }
+
+    static async findPeersByFilter(filter) {
+        if (!filter) {
+            filter = {};
+        }
+        let peers = await Peer.find(filter);
+        return peers;
     }
 
     static async findOrdererById(id) {
@@ -272,6 +287,14 @@ module.exports = class DbService {
         };
     }
 
+    static async findCaByFilter(filter) {
+        if (!filter) {
+            filter = {};
+        }
+        let ca = await CertAuthority.find(filter);
+        return ca;
+    }
+
     static async findOrganizationByName(consortiumId, name) {
         try {
             let organization = await Organization.findOne({consortium_id: consortiumId, name: name});
@@ -284,13 +307,24 @@ module.exports = class DbService {
     static async addChaincode(dto) {
         let cc = new Chaincode();
         cc.uuid = uuid();
+        cc.consortium_id = dto.consortiumId;
         cc.name = dto.name;
         cc.path = dto.path;
         cc.version = dto.version;
+        cc.desc = dto.desc;
         cc.type = dto.type;
         cc.peers = dto.peers;
+        cc.status = dto.status;
         cc.state = dto.state;
         cc = await cc.save();
+        return cc;
+    }
+
+    static async getChaincodeByFilter(filter) {
+        if (!filter) {
+            filter = {};
+        }
+        let cc = await Chaincode.find(filter);
         return cc;
     }
 
@@ -308,5 +342,56 @@ module.exports = class DbService {
     static async findChaincodeAndUpdate(id, update) {
         let cc = await Chaincode.findByIdAndUpdate(id, update);
         return cc;
+    }
+
+    static async addChaincodeRecord(dto) {
+        let ccRecord = new ChaincodeRecord();
+        ccRecord.uuid = uuid();
+        ccRecord.consortium_id = dto.consortiumId;
+        ccRecord.chaincode_id = dto.chaincodeId;
+        ccRecord.opt = dto.opt;
+        ccRecord.target = dto.target;
+        ccRecord.message = dto.msg;
+        ccRecord = await ccRecord.save();
+        return ccRecord;
+    }
+
+    static async getChaincodeRecordByFilter(filter) {
+        if (!filter) {
+            filter = {};
+        }
+        let record = await ChaincodeRecord.find(filter);
+        return record;
+    }
+
+    static async addAliCloud(dto) {
+        let alicloud = new AliCloud();
+        alicloud.uuid = uuid();
+        alicloud.instance = dto.instance;
+        alicloud.instance_type = dto.instanceType;
+        alicloud.vpc = dto.vpc;
+        alicloud.region = dto.region;
+        alicloud.zone = dto.zone;
+        alicloud.vswitch = dto.vswitch;
+        alicloud.security_group = dto.securityGroup;
+        alicloud.public_ip_address = dto.publicIpAddress;
+        alicloud.consortium_id = dto.consortiumId;
+        alicloud.creation_time = dto.creationTime;
+        alicloud = await alicloud.save();
+        return alicloud;
+    }
+
+    static async findOneAliCloud(consortiumId) {
+        let alicloud = await AliCloud.findOne({consortium_id: consortiumId});
+        return alicloud;
+    }
+
+    static async findInstances(consortiumId, instanceType) {
+        let aliclouds = await AliCloud.find({consortium_id: consortiumId, instance_type: instanceType});
+        return aliclouds;
+    }
+
+    static async delAlicloudRecord(id) {
+        await AliCloud.deleteOne({_id: id});
     }
 };

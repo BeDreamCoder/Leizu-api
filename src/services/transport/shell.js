@@ -23,6 +23,17 @@ module.exports = class ShellClient extends BaseClient {
         return new ShellClient(options);
     }
 
+    async checkImage(name) {
+        try {
+            let imageId = await this.exec([`image ls ${name} -q`]);
+            if (imageId === '') {
+                return this.exec([`pull ${name}`]);
+            }
+        } catch (ex) {
+            throw ex;
+        }
+    }
+
     async createContainer(parameters) {
         try {
             let containerId = await this.exec(parameters);

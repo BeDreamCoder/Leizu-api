@@ -23,7 +23,7 @@ const peerSchema = new mongoose.Schema({
     tls_cert: String,
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 });
 

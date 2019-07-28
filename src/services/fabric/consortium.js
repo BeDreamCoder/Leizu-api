@@ -14,8 +14,10 @@ module.exports.getConsortiumInfo = async (consortiumId, consortium,) => {
     let result = initConsortiumDetail(consortiumId);
     result.name = consortium.name;
     result.type = consortium.type;
+    result.version = consortium.version;
     result.create_time = consortium.date;
     let channelList = await DbService.getChannelsByCondition({consortium_id: consortiumId});
+    result.channels = channelList.map(channel => channel.name);
     result.channel_count = channelList.length;
     if (result.channel_count > 0) {
         result.consensus_type = getConsensusType(channelList[0]);
@@ -38,6 +40,7 @@ const initConsortiumDetail = (id) => {
         id: id,
         name: '',
         type: '',
+        version: '',
         consensus_type: 0,
         status: 0,
         create_time: '',
@@ -45,6 +48,7 @@ const initConsortiumDetail = (id) => {
         org_count: 0,
         peer_count: 0,
         chaincode_count: 0,
+        channels: []
     };
 
 };
@@ -57,6 +61,8 @@ const getConsensusType = (channel) => {
         return common.CONSENSUS_SOLO_VALUE;
     } else if (consensusType === common.CONSENSUS_KAFKA) {
         return common.CONSENSUS_KAFKA_VALUE;
+    } else if (consensusType === common.CONSENSUS_RAFT) {
+        return common.CONSENSUS_RAFT_VALUE;
     }
 };
 
@@ -95,4 +101,3 @@ module.exports.processDiscoveryResults = (rawResults) => {
 
     return results;
 };
-

@@ -9,8 +9,9 @@ SPDX-License-Identifier: Apache-2.0
 module.exports = {
     'name': 'Test-Chain-Local',
     'type': 'fabric',
-    'version': '1.3',
+    'version': '1.4',
     'db': 'leveldb',
+    'mode': 'bare',
     'consensus': 'solo',
     'ordererOrg': {
         'name': 'orderer-org',

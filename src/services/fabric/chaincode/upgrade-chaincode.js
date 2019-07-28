@@ -148,8 +148,8 @@ module.exports.upgradeChaincode = async function (peers, channelName, chaincodeN
     }
 
     if (!error_message) {
-        let message = util.format('Successfully upgrade chaincode in organization \'%s\' to the ' +
-            'channel \'%s\'', org.name, channelName);
+        let message = util.format('Successfully upgrade chaincode \'%s:%s\' in organization \'%s\' to the ' +
+            'channel \'%s\'', chaincodeName, chaincodeVersion, org.name, channelName);
         logger.info(message);
         return message;
     } else {

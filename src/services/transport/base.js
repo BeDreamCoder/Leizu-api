@@ -28,6 +28,10 @@ module.exports = class BaseClient {
         throw new Error('not implemented');
     }
 
+    async checkImage(name) {
+        throw new Error('abstract function called');
+    }
+
     async createContainer(parameters) {
         throw new Error('abstract function called');
     }

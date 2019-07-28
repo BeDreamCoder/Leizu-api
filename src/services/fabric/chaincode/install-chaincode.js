@@ -27,6 +27,7 @@ module.exports.installChaincode = async function (peers, chaincodeName, chaincod
                 let peer = await DbService.findPeerById(id);
                 if (!peer) continue;
                 let newPeer = await query.newPeer(client, peer, org);
+                newPeer.setName(utils.replacePeerName(peer.name));
                 targets.push(newPeer);
             }
         } else {
@@ -34,6 +35,7 @@ module.exports.installChaincode = async function (peers, chaincodeName, chaincod
             if (peers) {
                 for (let peer of peers) {
                     let newPeer = await query.newPeer(client, peer, org);
+                    newPeer.setName(utils.replacePeerName(peer.name));
                     targets.push(newPeer);
                 }
             }
@@ -59,19 +61,19 @@ module.exports.installChaincode = async function (peers, chaincodeName, chaincod
             if (proposalResponses && proposalResponses[i].response &&
                 proposalResponses[i].response.status === 200) {
                 oneGood = true;
-                message = util.format('"%s" successfully installed chaincode "%s:%s"', org.name, chaincodeName, chaincodeVersion);
+                message = util.format('"%s" successfully installed chaincode "%s:%s"', targets[i].getName(), chaincodeName, chaincodeVersion);
                 logger.debug(message);
             } else {
-                message = util.format('"%s" failed to install chaincode, due to', org.name,
+                message = util.format('"%s" failed to install chaincode, due to', targets[i].getName(),
                     proposalResponses[i].message ? proposalResponses[i].message : proposalResponses[i]);
             }
             allGood = allGood & oneGood;
             responses.push(message);
         }
         if (allGood) {
-            logger.info('Successfully install chaincode');
+            return responses;
         } else {
-            throw new Error(JSON.stringify(responses));
+            throw new Error(responses[0]);
         }
     } catch (error) {
         logger.error('Failed to install due to error: ', error.stack ? error.stack : error);

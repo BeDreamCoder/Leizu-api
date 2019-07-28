@@ -17,6 +17,10 @@ const Client = require('../transport/client');
 const common = require('../../libraries/common');
 const utils = require('../../libraries/utils');
 const config = require('../../env');
+const images = require('../../images');
+const AliCloud = require('../provider/common').AliCloud;
+const AliCloudClient = require('../provider/alicloud-client');
+const etcdctl = require('../coredns/etcdctl');
 
 module.exports = class PeerService {
 
@@ -49,6 +53,9 @@ module.exports = class PeerService {
             }
             //TODO: need to detect docker container status
             let status = 'running';
+            if (memory === 0 && cpu === 0) {
+                status = 'stop';
+            }
             peer.name = utils.replacePeerName(peer.name);
             return {...peer.toJSON(), organizationName, channelNames, status, cpu, memory};
         });
@@ -82,33 +89,32 @@ module.exports = class PeerService {
     }
 
     static async create(params) {
-        const {organizationId, image, name, username, password, host, port} = params;
+        const {organizationId, name, username, password, host, port} = params;
         const org = await DbService.findOrganizationById(organizationId);
         if (!org) {
             throw new Error('The organization does not exist: ' + organizationId);
         }
+        const consortium = await DbService.getConsortiumById(org.consortium_id);
         if (org.type !== common.PEER_TYPE_PEER) {
             throw new Error('The organization type can not orderer');
         }
         let peerNamePrefix = name ? name : 'peer';
         const peerName = `${peerNamePrefix}-${host.replace(/\./g, '-')}`;
         let peerPort = common.PORT.PEER;
-        let peerHome = common.PEER_HOME;
-        if (process.env.RUN_MODE === common.RUN_MODE.LOCAL) {
-            peerHome = '/tmp' + peerHome;
-        }
         if (utils.isSingleMachineTest()) {
             peerPort = utils.generateRandomHttpPort();
         }
-
+        let cfgPath = process.env.RUN_MODE === common.RUN_MODE.LOCAL ? '/tmp/hyperledger/fabric' : common.FABRIC_CFG_PATH;
         let containerOptions = {
-            image: image || config.network.peer.availableImages[0],
-            workingDir: `${peerHome}/${org.consortium_id}/${org.name}/peers/${peerName}`,
+            image: images.fabric[consortium.version].peer,
+            cfgPath: `${cfgPath}/${org.consortium_id}/${org.name}/peers/${peerName}`,
+            workDir: `${common.FABRIC_WORKDIR}/peer`,
             peerName,
             domainName: org.domain_name,
             mspId: org.msp_id,
             port: peerPort,
-            enableTls: config.network.peer.tls,
+            enableTls: config.tlsEnabled,
+            logLevel: config.fabricLogLevel
         };
 
         let connectionOptions = {
@@ -118,13 +124,16 @@ module.exports = class PeerService {
             port: port || config.ssh.port
         };
 
-        const peerDto = await this.preContainerStart({org, peerName, peerHome, connectionOptions});
+        const peerDto = await this.preContainerStart(org, peerName, containerOptions.cfgPath, connectionOptions);
 
         const client = Client.getInstance(connectionOptions);
         const parameters = utils.generatePeerContainerOptions(containerOptions);
+        await client.checkImage(containerOptions.image);
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${peerPort}`);
         if (container) {
+            await etcdctl.createZone(`${peerName}.${org.domain_name}`, host);
+
             return await DbService.addPeer(Object.assign({}, peerDto, {
                 name: peerName,
                 organizationId: organizationId,
@@ -136,13 +145,13 @@ module.exports = class PeerService {
         }
     }
 
-    static async preContainerStart({org, peerName, peerHome, connectionOptions}) {
+    static async preContainerStart(org, peerName, cfgPath, connectionOptions) {
         await this.createContainerNetwork(connectionOptions);
 
         const peerDto = await this.prepareCerts(org, peerName);
         const certFile = `${peerDto.credentialsPath}.zip`;
-        const remoteFile = `${peerHome}/${org.consortium_id}/${org.name}/peers/${peerName}.zip`;
-        const remotePath = `${peerHome}/${org.consortium_id}/${org.name}/peers/${peerName}`;
+        const remoteFile = `${cfgPath}.zip`;
+        const remotePath = cfgPath;
         await Client.getInstance(connectionOptions).transferFile({
             local: certFile,
             remote: remoteFile
@@ -218,6 +227,150 @@ module.exports = class PeerService {
         } catch (err) {
             throw err;
         }
+    }
+
+    static async handleAlicloud(mode, organizationId, peers) {
+        try {
+            const org = await DbService.findOrganizationById(organizationId);
+            if (!org) {
+                throw new Error('The organization does not exist: ' + organizationId);
+            }
+            let consortiumId = org.consortium_id;
+            let consortium = await DbService.getConsortiumById(consortiumId);
+            if (!consortium) {
+                throw  new Error('The consortium not exist: ' + org.consortium_id);
+            }
+            if (consortium.mode === mode) {
+                if (mode !== common.RUNMODE_CLOUD) {
+                    return peers;
+                }
+                let instancesAmount = PeerService.countEcsInstances(peers);
+
+                /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+                if (instancesAmount.normal > 0) {
+                    let normalInstances = await DbService.findInstances(consortiumId, AliCloud.InstanceTypeNormal);
+                    if (instancesAmount.normal > consortium.normal_instance_limit - normalInstances.length) {
+                        throw new Error('Normal instances quantity exceeds the limit:' + consortium.normal_instance_limit);
+                    }
+                }
+                if (instancesAmount.high > 0) {
+                    let highInstances = await DbService.findInstances(consortiumId, AliCloud.InstanceTypeHigh);
+                    if (instancesAmount.high > consortium.high_instance_limit - highInstances.length) {
+                        throw new Error('High instances quantity exceeds the limit:' + consortium.high_instance_limit);
+                    }
+                }
+                let instanceIds = [];
+                for (let i = 0; i < instancesAmount.normal; i++) {
+                    let ins = await DbService.addAliCloud({
+                        instanceType: AliCloud.InstanceTypeNormal,
+                        consortiumId: consortiumId,
+                    });
+                    instanceIds.push(ins._id);
+                }
+                for (let i = 0; i < instancesAmount.high; i++) {
+                    let ins = await DbService.addAliCloud({
+                        instanceType: AliCloud.InstanceTypeHigh,
+                        consortiumId: consortiumId,
+                    });
+                    instanceIds.push(ins._id);
+                }
+                /* * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * */
+
+                let promises = [];
+                let client = new AliCloudClient(consortiumId, AliCloud.RegionId);
+                if (consortium.network === common.CLOUD_NETWORK_CLASSICS) {
+                    let alicloud = await DbService.findOneAliCloud(consortiumId);
+                    client.setPersistVpc({
+                        RegionId: alicloud.region,
+                        VpcId: alicloud.vpc,
+                        ZoneId: alicloud.zone,
+                        SecurityGroupId: alicloud.security_group,
+                        VSwitchId: alicloud.vswitch,
+                    });
+                    if (instancesAmount.normal > 0) {
+                        promises.push(client.runInstances(AliCloud.InstanceTypeNormal, instancesAmount.normal));
+                    }
+                    if (instancesAmount.high > 0) {
+                        promises.push(client.runInstances(AliCloud.InstanceTypeHigh, instancesAmount.high));
+                    }
+                } else {
+                    for (let item of peers) {
+                        promises.push(client.run(utils.getInstanceType(item.instanceType), 1));
+                    }
+                }
+                let instances = await Promise.all(promises);
+
+                instanceIds.forEach(id => DbService.delAlicloudRecord(id));
+
+                if (instances && instances.length > 0) {
+                    let index = {
+                        normal: 0,
+                        high: -1,
+                    };
+                    if (instancesAmount.normal > 0 && instancesAmount.high > 0) {
+                        index.high = 1;
+                    } else if (instancesAmount.high > 0) {
+                        index.high = 0;
+                    }
+                    return peers.map(peer => {
+                        if (peer.instanceType === common.CLOUD_INSTANCE_TYPE_NORMAL) {
+                            if (instances[index.normal] && instances[index.normal].length > 0) {
+                                let item = instances[index.normal].pop();
+                                return {
+                                    organizationId: organizationId,
+                                    image: peer.image,
+                                    name: peer.name,
+                                    host: item['PublicIpAddress'][0],
+                                    port: peer.port,
+                                    username: AliCloud.InstanceSystemName,
+                                    password: AliCloud.InstancePassword,
+                                };
+                            } else {
+                                throw new Error('convertToSSHRequest occurred error: Normal instances not match request');
+                            }
+                        } else if (peer.instanceType === common.CLOUD_INSTANCE_TYPE_HIGH) {
+                            if (instances[index.high] && instances[index.high].length > 0) {
+                                let item = instances[index.high].pop();
+                                return {
+                                    organizationId: organizationId,
+                                    image: peer.image,
+                                    name: peer.name,
+                                    host: item['PublicIpAddress'][0],
+                                    port: peer.port,
+                                    username: AliCloud.InstanceSystemName,
+                                    password: AliCloud.InstancePassword,
+                                };
+                            } else {
+                                throw new Error('convertToSSHRequest occurred error: High instances not match request');
+                            }
+                        }
+                    });
+                } else {
+                    throw new Error('Create instances failed');
+                }
+            } else {
+                throw new Error('Param mode is invalid');
+            }
+        } catch (err) {
+            throw err;
+        }
+    }
+
+    static countEcsInstances(peers) {
+        let instances = {normal: 0, high: 0};
+        let counter = (type) => {
+            if (type === common.CLOUD_INSTANCE_TYPE_NORMAL) {
+                instances.normal++;
+            } else if (type === common.CLOUD_INSTANCE_TYPE_HIGH) {
+                instances.high++;
+            }
+        };
+        if (peers && peers.length > 0) {
+            for (let v of peers) {
+                counter(v.instanceType);
+            }
+        }
+        return instances;
     }
 
 };

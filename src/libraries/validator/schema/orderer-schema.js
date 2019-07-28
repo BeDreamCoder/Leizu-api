@@ -9,7 +9,7 @@ SPDX-License-Identifier: Apache-2.0
 const Joi = require('joi');
 const {objectId, string, hostname, port, ip} = require('./schema-utils');
 const Common = require('../../common');
-const config = require('../../../env');
+// const config = require('../../../env');
 
 const hostSchema = {
     host: hostname,
@@ -17,7 +17,7 @@ const hostSchema = {
 };
 
 module.exports.newOrdererSchema = Joi.object().keys({
-    image: Joi.string().valid(config.network.orderer.availableImages),
+    // image: Joi.string().valid(config.network.orderer.availableImages),
     host: ip,
     port: port,
     username: string,

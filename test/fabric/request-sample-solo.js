@@ -7,34 +7,25 @@ SPDX-License-Identifier: Apache-2.0
 'use strict';
 
 module.exports = {
-    'name': 'chain-stage',
+    'name': 'SampleConsortium',
     'type': 'fabric',
-    'version': '1.3',
+    'version': '1.4',
     'db': 'leveldb',
+    'mode': 'bare',
     'consensus': 'solo',
-    'kafka': [{
-        'name': 'kafka1',
-        'ip': '47.254.88.92',
-        'ssh_username': 'root',
-        'ssh_password': ''
-    }],
-    'zookeeper': [{
-        'name': 'zookeeper1',
-        'ip': '47.254.88.92',
-        'ssh_username': 'root',
-        'ssh_password': ''
-    }],
+    'kafka': [],
+    'zookeeper': [],
     'ordererOrg': {
         'name': 'orderer-org',
         'ca': {
             'name': 'ca-1',
-            'ip': '39.104.51.94',
+            'ip': '47.112.20.32',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'orderer': [{
             'name': 'orderer1',
-            'ip': '39.104.51.94',
+            'ip': '47.112.20.32',
             'ssh_username': 'root',
             'ssh_password': ''
         }]
@@ -43,18 +34,13 @@ module.exports = {
         'name': 'peer-org1',
         'ca': {
             'name': 'ca-2',
-            'ip': '39.104.152.81',
+            'ip': '47.112.15.8',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'peers': [{
             'name': 'peer0',
-            'ip': '39.104.51.94',
-            'ssh_username': 'root',
-            'ssh_password': ''
-        }, {
-            'name': 'peer1',
-            'ip': '39.104.152.81',
+            'ip': '47.112.15.8',
             'ssh_username': 'root',
             'ssh_password': ''
         }]

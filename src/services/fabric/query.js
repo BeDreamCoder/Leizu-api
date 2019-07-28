@@ -17,8 +17,6 @@ SPDX-License-Identifier: Apache-2.0
  *
  */
 
-const fs = require('fs');
-const path = require('path');
 const Client = require('fabric-client');
 const Peer = require('fabric-client/lib/Peer');
 const BlockDecoder = require('fabric-client/lib/BlockDecoder');
@@ -26,7 +24,6 @@ const FabricCAServices = require('fabric-ca-client');
 const DbService = require('../db/dao');
 const utils = require('../../libraries/utils');
 const env = require('../../env');
-const CredentialHelper = require('./tools/credential-helper').CredentialHelper;
 
 module.exports.getBlockChainInfo = async (channelName, peerConfig, caConfig) => {
     let client = new Client();
@@ -89,7 +86,7 @@ module.exports.getBlockByFilter = async (filter, channelName, peerConfig, caConf
     if (condition.queryBlockByHash) {
         result = await channel.queryBlockByHash(condition.blockHash, peer, true);
     } else if (condition.queryBlockByNumber) {
-        result = await channel.queryBlockByNumber(condition.blockNumber, peer, true);
+        result = await channel.queryBlock(condition.blockNumber, peer, true);
     } else if (condition.queryBlockByTxID) {
         result = await channel.queryBlockByTxID(condition.txId, peer, true);
     }
@@ -241,7 +238,7 @@ module.exports.newOrderer = async (client, orderer) => {
         'ssl-target-name-override': `${orderer.name}.${org.domain_name}`,
     };
     client.setTlsClientCertAndKey(clientCert, clientKey);
-    return client.newOrderer(utils.getUrl(orderer.location, env.network.orderer.tls), options);
+    return client.newOrderer(utils.getUrl(orderer.location, env.tlsEnabled), options);
 };
 
 module.exports.newPeer = async (client, peer, org) => {
@@ -254,5 +251,23 @@ module.exports.newPeer = async (client, peer, org) => {
         clientKey: clientKey,
         'ssl-target-name-override': `${peer.name}.${org.domain_name}`,
     };
-    return client.newPeer(utils.getUrl(peer.location, env.network.peer.tls), options);
+    return client.newPeer(utils.getUrl(peer.location, env.tlsEnabled), options);
+};
+
+module.exports.getTransaction = async (txId, channelName, peerConfig, caConfig) => {
+    let client = new Client();
+    client.setAdminSigningIdentity(peerConfig.adminKey, peerConfig.adminCert, peerConfig.mspid);
+    let enrollment = await module.exports.getClientKeyAndCert(caConfig);
+
+    let options = {
+        pem: enrollment.rootCertificate,
+        'clientCert': enrollment.certificate,
+        'clientKey': enrollment.key,
+        'ssl-target-name-override': peerConfig['server-hostname']
+    };
+
+    let peer = client.newPeer(peerConfig.url, options);
+    let channel = client.newChannel(channelName);
+
+    return await channel.queryTransaction(txId, peer, true);
 };

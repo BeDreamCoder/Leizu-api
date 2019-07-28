@@ -17,7 +17,7 @@ const certAuthoritySchema = new mongoose.Schema({
     consortium_id: mongoose.Schema.ObjectId,
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 });
 

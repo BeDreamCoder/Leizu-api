@@ -22,6 +22,14 @@ const batch_default = {
     }
 };
 
+const raft_options = {
+    TickInterval: '500ms',
+    ElectionTick: 10,
+    HeartbeatTick: 1,
+    MaxInflightBlocks: 5,
+    SnapshotIntervalSize: '20 MB',
+};
+
 module.exports = class ConfigTxBuilder {
     constructor(options) {
         this._options = options;
@@ -45,6 +53,10 @@ module.exports = class ConfigTxBuilder {
         return path.join('data', this._options.ConsortiumId, orgName, 'msp');
     }
 
+    _getOrdererTlsPath(ordererName) {
+        return path.join('data', this._options.ConsortiumId, this._options.Orderer.OrderOrg, 'peers', ordererName, 'tls/server.crt',);
+    }
+
     //build orderer's information
     _buildOrderer() {
         let obj = {
@@ -56,6 +68,22 @@ module.exports = class ConfigTxBuilder {
                 obj.Kafka = this._options.Orderer.Kafka;
             } else {
                 throw new Error('configtxgen not found kafka info');
+            }
+        }
+        if (obj.OrdererType === common.CONSENSUS_RAFT) {
+            if (this._options.Orderer.EtcdRaft) {
+                let consenters = [];
+                for (let consenter of this._options.Orderer.EtcdRaft.consenters) {
+                    consenters.push({
+                        Host: consenter.host,
+                        Port: consenter.port,
+                        ClientTLSCert: this._getOrdererTlsPath(consenter.name),
+                        ServerTLSCert: this._getOrdererTlsPath(consenter.name)
+                    });
+                }
+                obj.EtcdRaft = {Consenters: consenters, Options: raft_options};
+            } else {
+                throw new Error('configtxgen not found etcd raft info');
             }
         }
         if (this._options.Orderer.BatchTimeout) {
@@ -74,6 +102,7 @@ module.exports = class ConfigTxBuilder {
                 obj.Organizations.push(this._buildOrganization(org));
             }
         }
+        obj.Capabilities = {V1_1: true};
         return obj;
     }
 
@@ -96,12 +125,18 @@ module.exports = class ConfigTxBuilder {
                 orgs.push(this._buildOrganization(org));
             }
         }
-        return {Organizations: orgs};
+        return {Organizations: orgs, Capabilities: {V1_2: true}};
     }
 
     //for add new org
     buildPrintOrg() {
-        let configtx = this._buildApplication();
+        let orgs = [];
+        for (let org of this._options.Organizations) {
+            if (org.Type === common.PEER_TYPE_PEER) {
+                orgs.push(this._buildOrganization(org));
+            }
+        }
+        let configtx = {Organizations: orgs};
         let yamlData = yaml.safeDump(configtx);
         return yamlData;
     }
@@ -121,6 +156,7 @@ module.exports = class ConfigTxBuilder {
     buildConfigtxYaml() {
         let configtx = {Profiles: {}};
         configtx.Profiles[common.CONFIFTX_OUTPUT_GENESIS_BLOCK] = {
+            Capabilities: {V1_1: true},
             Orderer: this._buildOrderer(),
             Consortiums: this._buildConsortiums()
         };

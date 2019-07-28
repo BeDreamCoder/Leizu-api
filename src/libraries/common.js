@@ -21,6 +21,8 @@ module.exports.CONSENSUS_SOLO = 'solo';
 module.exports.CONSENSUS_SOLO_VALUE = 0;
 module.exports.CONSENSUS_KAFKA = 'kafka';
 module.exports.CONSENSUS_KAFKA_VALUE = 1;
+module.exports.CONSENSUS_RAFT = 'etcdraft';
+module.exports.CONSENSUS_RAFT_VALUE = 2;
 module.exports.CONFIFTX_OUTPUT_GENESIS_BLOCK = 'OrdererGenesis';
 module.exports.CONFIFTX_OUTPUT_CHANNEL = 'OrgsChannel';
 
@@ -59,10 +61,12 @@ module.exports.PORT = {
     PEER: 7051,
     CADVISOR: 8081,
     CONSUL_PORT: 8500,
+    KAFKA_BROKER: 9092
 };
 
-module.exports.PEER_HOME = '/etc/hyperledger/crypto';
-module.exports.ORDERER_HOME = '/etc/hyperledger/crypto';
+module.exports.FABRIC_CFG_PATH = '/etc/hyperledger/fabric';
+module.exports.CA_CFG_PATH = '/etc/hyperledger/fabric-ca-server';
+module.exports.FABRIC_WORKDIR = '/opt/gopath/src/github.com/hyperledger/fabric';
 module.exports.PEER_TYPE_ORDER = 1;
 module.exports.PEER_TYPE_PEER = 0;
 
@@ -80,19 +84,33 @@ module.exports.DB_TYPE_LEVELDB = 'leveldb';
 module.exports.DB_TYPE_COUCHDB = 'couchdb';
 module.exports.DB_TYPE_LIST = [this.DB_TYPE_LEVELDB, this.DB_TYPE_COUCHDB];
 module.exports.BLOCKCHAIN_TYPE_LIST = ['fabric'];
-module.exports.CONSENSUS_LIST = [this.CONSENSUS_KAFKA, this.CONSENSUS_SOLO];
-module.exports.VERSION_LIST = ['1.3'];
+module.exports.CONSENSUS_LIST = [this.CONSENSUS_KAFKA, this.CONSENSUS_SOLO, this.CONSENSUS_RAFT];
+module.exports.VERSION_LIST = ['1.2', '1.3', '1.4'];
+module.exports.RUNMODE_CLOUD = 'cloud';
+module.exports.RUNMODE_BARE = 'bare';
+module.exports.CLOUD_NETWORK_CLASSICS = 'classics';
+module.exports.CLOUD_NETWORK_VPC = 'vpc';
+module.exports.CLOUD_INSTANCE_TYPE_NORMAL = 'normal';
+module.exports.CLOUD_INSTANCE_TYPE_HIGH = 'high';
+module.exports.CLOUD_TYPE_ALICLOUD = 'aliyun';
 
 // chaincode
-module.exports.CHAINCODE_GOPATH = '/tmp/gopath'; // The actual path:/tmp/gopath/src/chaincode
+module.exports.CHAINCODE_GOPATH = '/opt/gopath'; // The actual path:/opt/gopath/src/chaincode
 module.exports.CHAINCODE_PATH = 'chaincode';
 module.exports.CHAINCODE_TYPE_GOLANG = 'golang';
 module.exports.CHAINCODE_TYPE_JAVA = 'java';
 module.exports.CHAINCODE_TYPE_NODE = 'node';
+module.exports.CHAINCODE_UPLOAD_MAX_SIZE = 2 * 1000 * 1000;
+module.exports.POLICY_MAJORITY = 'majority';
 module.exports.CHAINCODE_STATE_NONE = 0;
 module.exports.CHAINCODE_STATE_INSTALLED = 1; // The chaincode has been installed
 module.exports.CHAINCODE_STATE_DEPLOYED = 2;
 module.exports.CHAINCODE_STATE_UPGRADED = 3;
+module.exports.CHAINCODE_STATE_INSTALL_FAILED = 4;
+module.exports.CHAINCODE_STATE_DEPLOY_FAILED = 5;
+module.exports.CHAINCODE_STATE_UPGRADE_FAILED = 6;
+module.exports.CHAINCODE_DEPLOY = 'deploy';
+module.exports.CHAINCODE_UPGRADE = 'upgrade';
 
 module.exports.REQUEST_TIMEOUT_UNLIMITED = 0;
 
@@ -102,6 +120,9 @@ module.exports.RUN_MODE = {
 };
 
 module.exports.CADVISOR_SERVICE_NAME = 'cadvisor';
+
+module.exports.DOWNLOAD_ENTERPRISE_CERT = 1;
+module.exports.DOWNLOAD_CA_CERT = 2;
 
 module.exports.success = (data, msg) => {
     return {

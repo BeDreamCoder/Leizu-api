@@ -42,16 +42,23 @@ router.get('/:consortiumId/:id', async ctx => {
 });
 
 router.post('/', async ctx => {
-    let res = Validator.JoiValidate('create peer', ctx.request.body, Schema.newPeerSchema);
+    let params = ctx.request.body;
+    let res;
+    if (params.mode === common.RUNMODE_CLOUD) {
+        res = Validator.JoiValidate('create peer', params, Schema.cloudPeerSchema);
+    } else {
+        res = Validator.JoiValidate('create peer', params, Schema.barePeerSchema);
+    }
     if (!res.result) throw new BadRequest(res.errMsg);
     try {
-        let {organizationId, peers, channelId} = ctx.request.body;
+        let {mode, organizationId, peers, channelId} = ctx.request.body;
         if (channelId) {
             const channel = await DbService.getChannelById(channelId);
             if (!channel) {
                 throw new Error('The channel does not exist: ' + channelId);
             }
         }
+        peers = await PeerService.handleAlicloud(mode, organizationId, peers);
         var eventPromises = [];
         for (let item of peers) {
             let txPromise = new Promise((resolve, reject) => {

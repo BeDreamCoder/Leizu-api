@@ -21,6 +21,22 @@ module.exports = class SSHClient extends BaseClient {
         return new SSHClient(options);
     }
 
+    async checkImage(name) {
+        let sshClient = new NodeSSH();
+        try {
+            await sshClient.connect(this.options);
+            let imageId = await sshClient.exec(this.cmd, ['image', 'ls', name, '-q']);
+            if (imageId === '') {
+                return await sshClient.exec(this.cmd, ['pull', name]);
+            }
+        } catch (ex) {
+            logger.error(ex);
+            throw ex;
+        } finally {
+            await sshClient.dispose();
+        }
+    }
+
     async createContainer(parameters) {
         let sshClient = new NodeSSH();
         try {

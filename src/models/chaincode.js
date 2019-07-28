@@ -9,19 +9,21 @@ SPDX-License-Identifier: Apache-2.0
 const mongoose = require('mongoose');
 const chaincodeSchema = new mongoose.Schema({
     uuid: String,
+    consortium_id: mongoose.Schema.ObjectId,
     name: String,
     path: String,
     version: String,
+    desc: String,
     type: String,
     peers: [mongoose.Schema.ObjectId],
-    state: {
+    status: {
         type: Number,
         default: 0
     },
-    channel_id: mongoose.Schema.ObjectId,
+    state: JSON, // {channel: mongoose.Schema.ObjectId, state: 0}
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 });
 

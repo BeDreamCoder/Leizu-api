@@ -10,7 +10,7 @@ const Joi = require('joi');
 const {objectId, string, hostname, ip, port} = require('./schema-utils');
 const common = require('../../common');
 
-const serverSchema = () => {
+const bareSchema = () => {
     if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
         return {
             host: ip,
@@ -29,8 +29,24 @@ const serverSchema = () => {
     }
 };
 
-module.exports.newOrganizationSchema = Joi.object().keys(Object.assign({
+const cloudSchema = {
+    instanceType: Joi.string().valid([common.CLOUD_INSTANCE_TYPE_NORMAL, common.CLOUD_INSTANCE_TYPE_HIGH]).required(),
+    cloud: Joi.string().valid(common.CLOUD_TYPE_ALICLOUD).required(),
+    port: port
+};
+
+module.exports.bareOrganizationSchema = Joi.object().keys(Object.assign({
+    mode: Joi.string().valid([common.RUNMODE_BARE]).required(),
     name: string,
     domainName: hostname,
     consortiumId: objectId
-}, serverSchema()));
+}, bareSchema()));
+
+module.exports.cloudOrganizationSchema = Joi.object().keys(Object.assign({
+    mode: Joi.string().valid([common.RUNMODE_CLOUD]).required(),
+    name: string,
+    domainName: hostname,
+    consortiumId: objectId
+}, cloudSchema));
+
+

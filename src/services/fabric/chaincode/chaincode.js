@@ -16,11 +16,12 @@ const queryChaincode = require('./query-chaincode');
 
 module.exports = class ChaincodeService {
     constructor(chaincodeId, peers) {
+        this._consortiumId = '';
         this._chaincodeId = chaincodeId;
         this._chaincodeName = '';
         this._chaincodeVersion = '';
         this._chaincodePath = '';
-        this._chaincodeState = common.CHAINCODE_STATE_NONE;
+        this._chaincodeState = null;
         this._peers = peers;
         this._peersInfo = null;
     }
@@ -41,24 +42,34 @@ module.exports = class ChaincodeService {
             if (!cc) {
                 throw new Error('The chaincode does not exist: ' + this._chaincodeId);
             }
+            if (!this._peers && !cc.peers) {
+                throw new Error('No peers was found.');
+            }
+            await this.getPeersInfo(this._peers ? this._peers : cc.peers);
+            if (this._peers && cc.peers) {
+                if (this._peers.some(id => {
+                    return cc.peers.indexOf(id) !== -1;
+                })) {
+                    throw new Error('Exist installed peers.');
+                }
+                this._peers = this._peers.concat(cc.peers);
+            } else {
+                this._peers = cc.peers;
+            }
+            this._consortiumId = cc.consortium_id;
             this._chaincodeName = cc.name;
             this._chaincodeVersion = cc.version;
             this._chaincodePath = cc.path;
-            if (!this._peers && !cc.peers) {
-                throw new Error('No peers was found');
-            }
-            this._peers = this._peers ? this._peers : cc.peers;
             this._chaincodeState = cc.state;
-            await this.getPeersInfo();
         } catch (err) {
             throw err;
         }
     }
 
-    async getPeersInfo() {
+    async getPeersInfo(peers) {
         try {
             let peersInfo = {};
-            for (let id of this._peers) {
+            for (let id of peers) {
                 let peer = await DbService.findPeerById(id);
                 if (!peer) throw new Error('The peer does not exist: ' + id);
                 if (!peersInfo[peer.org_id]) peersInfo[peer.org_id] = [];
@@ -106,15 +117,20 @@ module.exports = class ChaincodeService {
     }
 
     static async uploadChaincode(params) {
-        let {chaincodeName, chaincodeVersion, chaincodeType, chaincodePath} = params;
+        let {consortiumId, chaincodeName, chaincodeVersion, chaincodeDesc, chaincodeType, chaincodePath} = params;
+        let consortium = await DbService.getConsortiumById(consortiumId);
+        if (!consortium) {
+            throw  new Error('Invalid consortium id.');
+        }
         chaincodeType = chaincodeType ? chaincodeType : common.CHAINCODE_TYPE_GOLANG;
         try {
             let cc = await DbService.addChaincode({
+                consortiumId: consortiumId,
                 name: chaincodeName,
                 version: chaincodeVersion,
+                desc: chaincodeDesc,
                 path: chaincodePath,
-                type: chaincodeType,
-                state: common.CHAINCODE_STATE_NONE
+                type: chaincodeType
             });
             return cc;
         } catch (err) {
@@ -122,92 +138,169 @@ module.exports = class ChaincodeService {
         }
     }
 
-    async installChaincode() {
+    async installChaincode(peerName) {
         try {
-            if (this._chaincodeState !== common.CHAINCODE_STATE_NONE) {
-                throw new Error('The chaincode can not be installed, state: ' + this._chaincodeState);
-            }
+            let results = [];
             for (let orgId in this._peersInfo) {
                 let organization = await DbService.findOrganizationById(orgId);
                 if (!organization) {
                     throw new Error('The organization does not exist: ' + orgId);
                 }
-                await installChaincode.installChaincode(this._peersInfo[orgId], this._chaincodeName, this._chaincodePath,
+                let responses = await installChaincode.installChaincode(this._peersInfo[orgId], this._chaincodeName, this._chaincodePath,
                     this._chaincodeVersion, common.CHAINCODE_TYPE_GOLANG, organization);
+                await DbService.addChaincodeRecord({
+                    consortiumId: this._consortiumId,
+                    chaincodeId: this._chaincodeId,
+                    opt: common.CHAINCODE_STATE_INSTALLED,
+                    target: peerName,
+                    msg: responses[0]
+                });
+                results = results.concat(responses);
             }
-
-            let cc = await DbService.findChaincodeAndUpdate(this._chaincodeId, {
-                peers: this._peers,
-                state: common.CHAINCODE_STATE_INSTALLED
+            await DbService.findChaincodeAndUpdate(this._chaincodeId, {
+                peers: this._peers, status: common.CHAINCODE_STATE_INSTALLED
             });
-            cc.peers = this._peers;
-            cc.state = common.CHAINCODE_STATE_INSTALLED;
-            return cc;
+            return results;
         } catch (err) {
+            await DbService.findChaincodeAndUpdate(this._chaincodeId, {
+                status: common.CHAINCODE_STATE_INSTALL_FAILED
+            });
+            await DbService.addChaincodeRecord({
+                consortiumId: this._consortiumId,
+                chaincodeId: this._chaincodeId,
+                opt: common.CHAINCODE_STATE_INSTALL_FAILED,
+                target: peerName,
+                msg: err.message
+            });
             throw err;
         }
     }
 
-    async instantiateAndUpgradeChaincode(channelId, functionName, args, opt) {
+    async instantiateAndUpgradeChaincode(channelId, functionName, args, opt, policyType) {
+        let channel;
         try {
-            if (this._chaincodeState !== common.CHAINCODE_STATE_INSTALLED) {
-                throw new Error('The chaincode can not be instantiated or upgraded, state: ' + this._chaincodeState);
+            if (policyType !== common.POLICY_MAJORITY) {
+                throw new Error('Endorsement policy is invalid.');
             }
-            let channel = await DbService.getChannelById(channelId);
+            channel = await DbService.getChannelById(channelId);
             if (!channel) {
                 throw new Error('The channel does not exist: ' + channelId);
             }
+            if (this._peers.every(id => {
+                return channel.peers.indexOf(id) === -1;
+            })) {
+                throw new Error('The chaincode is not yet installed in the channel.');
+            }
             let endorsementPolicy = await ChaincodeService.buildEndorsementPolicy(channel.orgs);
 
+            if (!channel.orgs || channel.orgs.length === 0) {
+                throw new Error('No organization was found on the channel');
+            }
             let orgIds = Object.getOwnPropertyNames(this._peersInfo);
             if (!orgIds || orgIds.length === 0) {
                 throw new Error('No organization was found');
             }
-            let orgId = orgIds[0];
-            let organization = await DbService.findOrganizationById(orgId);
-            if (!organization) {
-                throw new Error('The organization does not exist: ' + orgId);
-            }
+
             let chaincodeState;
-            if (opt === 'instantiate') {
-                await instantiateChaincode.instantiateChaincode(this._peersInfo[orgId], channel.name, this._chaincodeName,
-                    this._chaincodeVersion, functionName, common.CHAINCODE_TYPE_GOLANG, args, organization, endorsementPolicy);
-                chaincodeState = common.CHAINCODE_STATE_DEPLOYED;
-            } else if (opt === 'upgrade') {
-                await upgradeChaincode.upgradeChaincode(this._peersInfo[orgId], channel.name, this._chaincodeName,
-                    this._chaincodeVersion, functionName, common.CHAINCODE_TYPE_GOLANG, args, organization, endorsementPolicy);
-                chaincodeState = common.CHAINCODE_STATE_UPGRADED;
+            let result;
+            let errMsg = [];
+            let bSucceed = false;
+            for (let id of orgIds) {
+                if (channel.orgs.indexOf(String(id)) !== -1) {
+                    try {
+                        let organization = await DbService.findOrganizationById(id);
+                        if (!organization) {
+                            throw new Error('The organization does not exist: ' + id);
+                        }
+                        let targets = [this._peersInfo[id][0]];
+                        if (opt === 'instantiate') {
+                            result = await instantiateChaincode.instantiateChaincode(targets, channel.name, this._chaincodeName,
+                                this._chaincodeVersion, functionName, common.CHAINCODE_TYPE_GOLANG, args, organization, endorsementPolicy);
+                            chaincodeState = common.CHAINCODE_STATE_DEPLOYED;
+                        } else if (opt === 'upgrade') {
+                            result = await upgradeChaincode.upgradeChaincode(targets, channel.name, this._chaincodeName,
+                                this._chaincodeVersion, functionName, common.CHAINCODE_TYPE_GOLANG, args, organization, endorsementPolicy);
+                            chaincodeState = common.CHAINCODE_STATE_UPGRADED;
+                        }
+                        bSucceed = true;
+                        break;
+                    } catch (e) {
+                        errMsg.push(e.message);
+                    }
+                }
             }
-            let cc = await DbService.findChaincodeAndUpdate(this._chaincodeId, {
-                state: chaincodeState,
-                channel_id: channelId
+            if (bSucceed === false) throw new Error(JSON.stringify(errMsg));
+
+            let state = this._chaincodeState ? this._chaincodeState : {};
+            state[channelId] = chaincodeState;
+            await DbService.addChaincodeRecord({
+                consortiumId: this._consortiumId,
+                chaincodeId: this._chaincodeId,
+                opt: chaincodeState,
+                target: channel.name,
+                msg: result
             });
-            cc.state = chaincodeState;
-            return cc;
+            await DbService.findChaincodeAndUpdate(this._chaincodeId, {
+                state: state,
+                status: chaincodeState
+            });
+            return {
+                success: true,
+                target: channel.name,
+                data: result
+            };
         } catch (err) {
-            throw err;
+            let channelName = channel ? channel.name : channelId;
+            let status = opt === 'instantiate' ? common.CHAINCODE_STATE_DEPLOY_FAILED : common.CHAINCODE_STATE_UPGRADE_FAILED;
+            await DbService.findChaincodeAndUpdate(this._chaincodeId, {
+                status: status
+            });
+            await DbService.addChaincodeRecord({
+                consortiumId: this._consortiumId,
+                chaincodeId: this._chaincodeId,
+                opt: status,
+                target: channelName,
+                msg: err.message
+            });
+            return {
+                success: false,
+                target: channelName,
+                error: err
+            };
         }
     }
 
     async invokeChaincode(channelId, functionName, args) {
         try {
-            if (this._chaincodeState < common.CHAINCODE_STATE_DEPLOYED) {
-                throw new Error('The chaincode has not been instantiated, state: ' + this._chaincodeState);
-            }
             let channel = await DbService.getChannelById(channelId);
             if (!channel) {
                 throw new Error('The channel does not exist: ' + channelId);
             }
-
+            if (!channel.orgs || channel.orgs.length === 0) {
+                throw new Error('No organization was found on the channel');
+            }
             let orgIds = Object.getOwnPropertyNames(this._peersInfo);
             if (!orgIds || orgIds.length === 0) {
                 throw new Error('No organization was found');
             }
-            let organization = await DbService.findOrganizationById(orgIds[0]);
-            if (!organization) {
-                throw new Error('The organization does not exist: ' + orgIds[0]);
+            let orgId;
+            for (let id of orgIds) {
+                if (channel.orgs.indexOf(String(id)) !== -1) {
+                    orgId = id;
+                    break;
+                }
             }
-            return invokeChaincode.invokeChaincode(this._peers, organization, channel.name, this._chaincodeName, functionName, args);
+            let organization = await DbService.findOrganizationById(orgId);
+            if (!organization) {
+                throw new Error('The organization does not exist: ' + orgId);
+            }
+            let endorsePeer = [];
+            for (let id of orgIds) {
+                if (channel.orgs.indexOf(String(id)) !== -1 && this._peersInfo[id].length > 0) {
+                    endorsePeer.push(this._peersInfo[id][0]);
+                }
+            }
+            return invokeChaincode.invokeChaincode(endorsePeer, organization, channel.name, this._chaincodeName, functionName, args);
         } catch (err) {
             throw err;
         }
@@ -215,24 +308,35 @@ module.exports = class ChaincodeService {
 
     async queryChaincode(channelId, functionName, args) {
         try {
-            if (this._chaincodeState < common.CHAINCODE_STATE_DEPLOYED) {
-                throw new Error('The chaincode has not been instantiated, state: ' + this._chaincodeState);
-            }
             let channel = await DbService.getChannelById(channelId);
             if (!channel) {
                 throw new Error('The channel does not exist: ' + channelId);
             }
-
+            if (!channel.orgs || channel.orgs.length === 0) {
+                throw new Error('No organization was found on the channel');
+            }
             let orgIds = Object.getOwnPropertyNames(this._peersInfo);
             if (!orgIds || orgIds.length === 0) {
                 throw new Error('No organization was found');
             }
-            let orgId = orgIds[0];
+            let orgId;
+            for (let id of orgIds) {
+                if (channel.orgs.indexOf(String(id)) !== -1) {
+                    orgId = id;
+                    break;
+                }
+            }
             let organization = await DbService.findOrganizationById(orgId);
             if (!organization) {
                 throw new Error('The organization does not exist: ' + orgId);
             }
-            return queryChaincode.queryChaincode(this._peers, organization, channel.name, this._chaincodeName, functionName, args);
+            let endorsePeer = [];
+            for (let id of orgIds) {
+                if (channel.orgs.indexOf(String(id)) !== -1 && this._peersInfo[id].length > 0) {
+                    endorsePeer.push(this._peersInfo[id][0]);
+                }
+            }
+            return queryChaincode.queryChaincode(endorsePeer, organization, channel.name, this._chaincodeName, functionName, args);
         } catch (err) {
             throw err;
         }

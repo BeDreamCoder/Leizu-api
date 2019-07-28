@@ -34,6 +34,12 @@ module.exports = class RequestDaoService {
     async addConsortiumByRequest(dto) {
         let consortium = new Consortium();
         consortium.name = dto.name;
+        consortium.mode = dto.mode;
+        consortium.network = dto.network;
+        consortium.type = dto.type;
+        consortium.version = dto.version;
+        consortium.normal_instance_limit = dto.normalInstanceLimit;
+        consortium.high_instance_limit = dto.highInstanceLimit;
         consortium.uuid = uuid();
         //consortium.network_config = JSON.stringify(dto); //update the network config after network is ready.
         consortium.request_id = dto.requestId;

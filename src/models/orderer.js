@@ -19,7 +19,7 @@ const ordererSchema = new mongoose.Schema({
     org_id: mongoose.Schema.ObjectId,
     date: {
         type: Date,
-        default: Date.now()
+        default: Date.now
     }
 });
 

@@ -5,35 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 */
 
 module.exports = {
-    network: {
-        peer: {
-            tls: true,
-            availableImages: [
-                'hyperledger/fabric-ca-peer',
-            ]
-        },
-        orderer: {
-            tls: true,
-            availableImages: [
-                'hyperledger/fabric-ca-orderer',
-            ]
-        },
-        cadvisor: {
-            availableImages: [
-                'google/cadvisor'
-            ]
-        },
-        consul: {
-            availableImages: [
-                'consul'
-            ]
-        },
-        filebeat: {
-            availableImages: [
-                'zhigui/filebeat'
-            ]
-        }
-    },
+    fabricLogLevel: 'info',
+    tlsEnabled: true,
     koaLogger: true,
     jwt: {
         secret: '`yGE[RniLYCX6rCni>DKG_(3#si&zvA$WPmgrb2P',
@@ -57,8 +30,18 @@ module.exports = {
     configtxlator: {
         url: 'http://127.0.0.1:7059',
     },
+    etcdCluster: {
+        url: 'http://127.0.0.1:2379',
+    },
+    coredns: '127.0.0.1',
     cryptoConfig: {
         name: 'configtx.yaml',
         path: '/tmp/crypto-config'
+    },
+    aliCloud: {
+        url: 'http://127.0.0.1:8080',
+    },
+    tillerHost: {
+        url: 'http://127.0.0.1:8080',
     }
 };

@@ -9,11 +9,13 @@ SPDX-License-Identifier: Apache-2.0
 const utils = require('../../libraries/utils');
 const stringUtil = require('../../libraries/string-util');
 const common = require('../../libraries/common');
+const AliCloud = require('../provider/common').AliCloud;
+const images = require('../../images');
 
 module.exports = class RequestHelper {
 
-    static decomposeRequest(ctx) {
-        let configuration = utils.extend({}, ctx.request.body);
+    static decomposeRequest(request) {
+        let configuration = utils.extend({}, request);
         configuration.orderer = RequestHelper.getOrderer(configuration);
         configuration.peers = RequestHelper.getPeers(configuration);
         configuration.consuls = RequestHelper.getConsuls(configuration);
@@ -21,8 +23,8 @@ module.exports = class RequestHelper {
         if (configuration.isKafkaConsensus) {
             configuration.kafkaCluster = RequestHelper.getKafkaCluster(configuration);
         }
-        configuration.ordererImage = 'hyperledger/fabric-ca-orderer';
-        configuration.peerImage = 'hyperledger/fabric-ca-peer';
+        configuration.ordererImage = images.fabric[configuration.version].orderer;
+        configuration.peerImage = images.fabric[configuration.version].peer;
         return configuration;
     }
 
@@ -139,6 +141,144 @@ module.exports = class RequestHelper {
             return true;
         } else {
             return false;
+        }
+    }
+
+    static countEcsInstances(request) {
+        let instances = {normal: 0, high: 0};
+        let counter = (type) => {
+            if (type === common.CLOUD_INSTANCE_TYPE_NORMAL) {
+                instances.normal++;
+            } else if (type === common.CLOUD_INSTANCE_TYPE_HIGH) {
+                instances.high++;
+            }
+        };
+
+        if (request.ordererOrg) {
+            let ordererOrg = request.ordererOrg;
+            if (ordererOrg.ca) {
+                counter(ordererOrg.ca.type);
+            }
+            if (ordererOrg.orderer && ordererOrg.orderer.length > 0) {
+                for (let v of ordererOrg.orderer) {
+                    counter(v.type);
+                }
+            }
+        }
+        if (request.peerOrgs && request.peerOrgs.length > 0) {
+            for (let item of request.peerOrgs) {
+                if (item.ca) {
+                    counter(item.ca.type);
+                }
+                if (item.peers && item.peers.length > 0) {
+                    for (let v of item.peers) {
+                        counter(v.type);
+                    }
+                }
+            }
+        }
+        if (request.consensus === common.CONSENSUS_KAFKA) {
+            if (request.kafka && request.kafka.length > 0) {
+                for (let v of request.kafka) {
+                    counter(v.type);
+                }
+            }
+            if (request.zookeeper && request.zookeeper.length > 0) {
+                for (let v of request.zookeeper) {
+                    counter(v.type);
+                }
+            }
+        }
+
+        return instances;
+    }
+
+    static convertToSSHRequest(request, instances, amount) {
+        let index = {
+            normal: 0,
+            high: -1,
+        };
+        if (amount.normal > 0 && amount.high > 0) {
+            index.high = 1;
+        } else if (amount.high > 0) {
+            index.high = 0;
+        }
+        let convert = (name, type) => {
+            if (type === common.CLOUD_INSTANCE_TYPE_NORMAL) {
+                if (instances[index.normal] && instances[index.normal].length > 0) {
+                    let item = instances[index.normal].pop();
+                    return {
+                        'name': name,
+                        'ip': item['PublicIpAddress'][0],
+                        'ssh_username': AliCloud.InstanceSystemName,
+                        'ssh_password': AliCloud.InstancePassword
+                    };
+                } else {
+                    throw new Error('convertToSSHRequest occurred error: Normal instances not match request');
+                }
+            } else if (type === common.CLOUD_INSTANCE_TYPE_HIGH) {
+                if (instances[index.high] && instances[index.high].length > 0) {
+                    let item = instances[index.high].pop();
+                    return {
+                        'name': name,
+                        'ip': item['PublicIpAddress'][0],
+                        'ssh_username': AliCloud.InstanceSystemName,
+                        'ssh_password': AliCloud.InstancePassword
+                    };
+                } else {
+                    throw new Error('convertToSSHRequest occurred error: High instances not match request');
+                }
+            }
+        };
+
+        if (request.ordererOrg) {
+            let ordererOrg = request.ordererOrg;
+            if (ordererOrg.ca) {
+                request.ordererOrg.ca = convert(ordererOrg.ca.name, ordererOrg.ca.type);
+            }
+            if (ordererOrg.orderer && ordererOrg.orderer.length > 0) {
+                let orderers = [];
+                for (let v of ordererOrg.orderer) {
+                    orderers.push(convert(v.name, v.type));
+                }
+                request.ordererOrg.orderer = orderers;
+            }
+        }
+
+        if (request.peerOrgs && request.peerOrgs.length > 0) {
+            let peers = [];
+            for (let item of request.peerOrgs) {
+                let obj = {name: item.name};
+                if (item.ca) {
+                    obj.ca = convert(item.ca.name, item.ca.type);
+                }
+                if (item.peers && item.peers.length > 0) {
+                    let items = [];
+                    for (let v of item.peers) {
+                        items.push(convert(v.name, v.type));
+                    }
+                    obj.peers = items;
+                }
+                peers.push(obj);
+            }
+            request.peerOrgs = peers;
+        }
+
+        if (request.consensus === common.CONSENSUS_KAFKA) {
+            if (request.kafka && request.kafka.length > 0) {
+                let kafkas = [];
+                for (let v of request.kafka) {
+                    kafkas.push(convert(v.name, v.type));
+                }
+                request.kafka = kafkas;
+            }
+            if (request.zookeeper && request.zookeeper.length > 0) {
+                let zks = [];
+                for (let v of request.zookeeper) {
+                    zks.push(convert(v.name, v.type));
+                }
+                request.zookeeper = zks;
+            }
         }
     }
 };

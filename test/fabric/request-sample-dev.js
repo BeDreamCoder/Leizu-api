@@ -11,6 +11,7 @@ module.exports = {
     'type': 'fabric',
     'version': '1.3',
     'db': 'leveldb',
+    'mode': 'bare', // cloud
     'consensus': 'kafka',
     'kafka': [
         {

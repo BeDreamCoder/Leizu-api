@@ -246,7 +246,7 @@ module.exports = class FabricService {
                 await FabricService.addCertAuthority(networkConfig, organization);
                 result.organizations.push(organization);
                 // transfer certs file to configtxlator for update channel
-                await configtxlator.upload(organization.consortium_id, organization.name, `${organization.msp_path}.zip`);
+                await configtxlator.upload(`./data/${organization.consortium_id}/${organization.name}/`, `${organization.msp_path}.zip`);
                 fs.unlinkSync(`${organization.msp_path}.zip`);
             }
             for (let index = 0; index < results.orderers.length; index++) {
