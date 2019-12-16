@@ -16,25 +16,25 @@ module.exports = {
     'kafka': [
         {
             'name': 'kafka1',
-            'ip': '47.112.20.32',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         {
             'name': 'kafka2',
-            'ip': '47.112.15.8',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         {
             'name': 'kafka3',
-            'ip': '47.100.32.127',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         {
             'name': 'kafka4',
-            'ip': '101.132.168.145',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }
@@ -42,19 +42,19 @@ module.exports = {
     'zookeeper': [
         {
             'name': 'zookeeper1',
-            'ip': '47.112.20.32',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         {
             'name': 'zookeeper2',
-            'ip': '47.112.15.8',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         {
             'name': 'zookeeper3',
-            'ip': '101.132.168.145',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }
@@ -63,13 +63,13 @@ module.exports = {
         'name': 'orderer-org',
         'ca': {
             'name': 'ca-1',
-            'ip': '101.132.168.145',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'orderer': [{
             'name': 'orderer1',
-            'ip': '101.132.168.145',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }]
@@ -78,13 +78,13 @@ module.exports = {
         'name': 'peer-org1',
         'ca': {
             'name': 'ca-2',
-            'ip': '47.100.32.127',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'peers': [{
             'name': 'peer0',
-            'ip': '47.100.32.127',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }]

@@ -19,13 +19,13 @@ module.exports = {
         'name': 'orderer-org',
         'ca': {
             'name': 'ca-1',
-            'ip': '47.112.20.32',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'orderer': [{
             'name': 'orderer1',
-            'ip': '47.112.20.32',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }]
@@ -34,13 +34,13 @@ module.exports = {
         'name': 'peer-org1',
         'ca': {
             'name': 'ca-2',
-            'ip': '47.112.15.8',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         },
         'peers': [{
             'name': 'peer0',
-            'ip': '47.112.15.8',
+            'ip': '127.0.0.1',
             'ssh_username': 'root',
             'ssh_password': ''
         }]

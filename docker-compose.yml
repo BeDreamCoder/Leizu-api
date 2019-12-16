@@ -27,21 +27,5 @@ services:
     - "8080:8080"
     command: /bin/sh -c "cd /usr/src/app  && npm start"
 
-  mongodb:
-    image: mongo
-    container_name: dashboard-mongodb
-    ports:
-    - "27017:27017"
-    volumes:
-    - dbdata:/data/db
-
-  configtxlator:
-    image: zhigui/configtxlator
-    container_name: dashboard-configtxlator
-    ports:
-    - "7059:7059"
-    volumes:
-    - /tmp/configtxlator/data:/work/data
-
 volumes:
   dbdata: {}

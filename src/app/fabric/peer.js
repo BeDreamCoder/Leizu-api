@@ -61,6 +61,16 @@ router.post('/', async ctx => {
         peers = await PeerService.handleAlicloud(mode, organizationId, peers);
         var eventPromises = [];
         for (let item of peers) {
+            // run metrics server
+            if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+                let cadvisorItem = {
+                    host: item.host,
+                    username: item.username,
+                    password: item.password
+                };
+                CAdvisorService.create(cadvisorItem);
+            }
+
             let txPromise = new Promise((resolve, reject) => {
                 try {
                     item.organizationId = organizationId;
@@ -71,14 +81,6 @@ router.post('/', async ctx => {
                 }
             });
 
-            if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
-                let cadvisorItem = {
-                    host: item.host,
-                    username: item.username,
-                    password: item.password
-                };
-                CAdvisorService.create(cadvisorItem);
-            }
             eventPromises.push(txPromise);
         }
         await Promise.all(eventPromises).then(async result => {

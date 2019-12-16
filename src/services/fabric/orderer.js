@@ -15,6 +15,7 @@ const CryptoCaService = require('./tools/crypto-ca');
 const DbService = require('../db/dao');
 const Client = require('../transport/client');
 const etcdctl = require('../coredns/etcdctl');
+const CAdvisorService = require('./cadvisor');
 
 module.exports = class OrdererService {
 
@@ -58,8 +59,8 @@ module.exports = class OrdererService {
         };
 
         const ordererDto = await this.preContainerStart(org, consortium, ordererName, containerOptions.cfgPath,
-            connectionOptions, params.certs, params.genesisBlockPath);
-
+            connectionOptions, params.certs, params.genesisBlockPath, params.tlsRootCas);
+        containerOptions.tlsRootCas = ordererDto.cas;
         const client = Client.getInstance(connectionOptions);
         const parameters = utils.generateOrdererContainerOptions(containerOptions);
         await client.checkImage(containerOptions.image);
@@ -67,6 +68,12 @@ module.exports = class OrdererService {
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${ordererPort}`);
         if (container) {
             await etcdctl.createZone(`${ordererName}.${org.domain_name}`, host);
+
+            await CAdvisorService.registerFabricService({
+                host: host,
+                name: common.NODE_TYPE_ORDERER,
+                port: common.PORT.ORDERER_METRICS
+            });
 
             return await DbService.addOrderer(Object.assign({}, ordererDto, {
                 name: ordererName,
@@ -79,7 +86,7 @@ module.exports = class OrdererService {
         }
     }
 
-    static async preContainerStart(org, consortium, ordererName, cfgPath, connectionOptions, ordererDto, genesisBlockPath) {
+    static async preContainerStart(org, consortium, ordererName, cfgPath, connectionOptions, ordererDto, genesisBlockPath, tlsRootCas) {
         await this.createContainerNetwork(connectionOptions);
 
         const certFile = `${ordererDto.credentialsPath}.zip`;
@@ -88,6 +95,13 @@ module.exports = class OrdererService {
         const client = Client.getInstance(connectionOptions);
         await client.transferFile({local: certFile, remote: remoteFile});
         await client.transferFile({local: genesisBlockPath, remote: `${remotePath}/genesis.block`});
+        let cas = [];
+        for (let key in tlsRootCas) {
+            let remoteFile = `${remotePath}/tlsrootcas/ca${key}.crt`;
+            await client.transferFile({local: tlsRootCas[key], remote: remoteFile});
+            cas.push(remoteFile);
+        }
+        ordererDto.cas = cas;
         const bash = Client.getInstance(Object.assign({}, connectionOptions, {cmd: 'bash'}));
         await bash.exec(['-c', `unzip -o ${remoteFile} -d ${remotePath}`]);
         return ordererDto;

@@ -19,14 +19,14 @@ Ledger Management Dashboard
 > cp .env.dev .env
 > ```
 
-1. Start all the dependencies
+1. Start all the dependencies service
 ```
-docker-compose -f docker-compose-dev.yml up -d
+cd build
 ```
 
 2. Initialize the default user: `admin/passw0rd`
 ```
-docker exec -it dashboard-mongo mongo
+docker exec -it mongodb mongo
 use zigdb;
 db.user.insert({username:'admin',password:'5c604fdbe7060760ab75d54c042d71f0e49e621a'});
 ```

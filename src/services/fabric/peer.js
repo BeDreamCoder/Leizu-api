@@ -21,6 +21,7 @@ const images = require('../../images');
 const AliCloud = require('../provider/common').AliCloud;
 const AliCloudClient = require('../provider/alicloud-client');
 const etcdctl = require('../coredns/etcdctl');
+const CAdvisorService = require('./cadvisor');
 
 module.exports = class PeerService {
 
@@ -133,6 +134,12 @@ module.exports = class PeerService {
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${peerPort}`);
         if (container) {
             await etcdctl.createZone(`${peerName}.${org.domain_name}`, host);
+
+            await CAdvisorService.registerFabricService({
+                host: host,
+                name: common.NODE_TYPE_PEER,
+                port: common.PORT.PEER_METRICS
+            });
 
             return await DbService.addPeer(Object.assign({}, peerDto, {
                 name: peerName,

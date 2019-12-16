@@ -103,6 +103,7 @@ module.exports.generatePeerContainerOptions = (options) => {
         '--hostname', peerId,
         '--network', common.DEFAULT_NETWORK.NAME,
         '-p', `${port}:7051`,
+        '-p', '9443:9443',
         '-w', workDir,
         '-e', 'CORE_VM_ENDPOINT=unix:///var/run/docker.sock',
         '-e', 'CORE_VM_DOCKER_ATTACHSTDOUT=true',
@@ -126,6 +127,8 @@ module.exports.generatePeerContainerOptions = (options) => {
         // '-e', `CORE_PEER_TLS_CLIENTROOTCAS_FILES=${common.FABRIC_CFG_PATH}/tls/ca.pem`,
         '-e', `CORE_LOGGING_LEVEL=${logLevel}`,
         '-e', `FABRIC_LOGGING_SPEC=${logLevel}`,
+        '-e', 'CORE_METRICS_PROVIDER=prometheus',
+        '-e', `CORE_OPERATIONS_LISTENADDRESS=${peerId}:9443`,
         '-v', '/var/run:/var/run',
         '-v', `${cfgPath}/msp:${common.FABRIC_CFG_PATH}/msp`,
         '-v', `${cfgPath}/tls:${common.FABRIC_CFG_PATH}/tls`,
@@ -137,8 +140,15 @@ module.exports.generatePeerContainerOptions = (options) => {
 };
 
 module.exports.generateOrdererContainerOptions = (options) => {
-    const {image, ordererName, domainName, mspId, port, cfgPath, workDir, enableTls, logLevel} = options;
+    const {image, ordererName, domainName, mspId, port, cfgPath, workDir, enableTls, logLevel, tlsRootCas} = options;
     let ordererCfgPath = `${common.FABRIC_CFG_PATH}/orderer`;
+
+    let cas = [];
+    for (let key in tlsRootCas) {
+        cas.push(`${ordererCfgPath}/tlsrootcas/ca${key}.crt`);
+    }
+    cas.push(`${ordererCfgPath}/msp/tlscacerts/cert.pem`);
+
     return [
         'create',
         '--name', `${ordererName}.${domainName}`,
@@ -146,6 +156,7 @@ module.exports.generateOrdererContainerOptions = (options) => {
         '--network', common.DEFAULT_NETWORK.NAME,
         '-w', workDir,
         '-p', `${port}:7050`,
+        '-p', '8443:8443',
         '-e', 'GODEBUG=netdns=go',
         '-e', `ORDERER_GENERAL_LOGLEVEL=${logLevel}`,
         '-e', `FABRIC_LOGGING_SPEC=${logLevel}`,
@@ -157,15 +168,18 @@ module.exports.generateOrdererContainerOptions = (options) => {
         '-e', `ORDERER_GENERAL_TLS_ENABLED=${enableTls}`,
         '-e', `ORDERER_GENERAL_TLS_CERTIFICATE=${ordererCfgPath}/tls/server.crt`,
         '-e', `ORDERER_GENERAL_TLS_PRIVATEKEY=${ordererCfgPath}/tls/server.key`,
-        '-e', `ORDERER_GENERAL_TLS_ROOTCAS=[${ordererCfgPath}/msp/tlscacerts/cert.pem]`,
+        '-e', `ORDERER_GENERAL_TLS_ROOTCAS=[${cas}]`,
         // '-e', `ORDERER_GENERAL_TLS_CLIENTAUTHREQUIRED=${enableTls}`,
         // '-e', `ORDERER_GENERAL_TLS_CLIENTROOTCAS=[${ordererCfgPath}/msp/tlscacerts/cert.pem]`,
         '-e', `ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=${ordererCfgPath}/tls/server.crt`,
         '-e', `ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=${ordererCfgPath}/tls/server.key`,
-        '-e', `ORDERER_GENERAL_CLUSTER_ROOTCAS=[${ordererCfgPath}/msp/tlscacerts/cert.pem]`,
+        '-e', `ORDERER_GENERAL_CLUSTER_ROOTCAS=[${cas}]`,
+        '-e', 'ORDERER_METRICS_PROVIDER=prometheus',
+        '-e', `ORDERER_OPERATIONS_LISTENADDRESS=${ordererName}.${domainName}:8443`,
         '-v', '/var/run:/var/run',
         '-v', `${cfgPath}/msp:${ordererCfgPath}/msp`,
         '-v', `${cfgPath}/tls:${ordererCfgPath}/tls`,
+        '-v', `${cfgPath}/tlsrootcas:${ordererCfgPath}/tlsrootcas`,
         '-v', `${cfgPath}/genesis.block:${ordererCfgPath}/genesis.block`,
         '--dns', process.env.COREDNS_HOST || coredns,
         '--dns-search', common.BASE_DOMAIN_NAME,
@@ -180,6 +194,7 @@ module.exports.generateCadvisorContainerOptions = (options) => {
         'create',
         '--name', `${cAdvisorName}`,
         '--network', common.DEFAULT_NETWORK.NAME,
+        '--privileged=true',
         '-p', `${port}:8080`,
         '-v', '/:/rootfs:ro',
         '-v', '/var/run:/var/run:rw',
@@ -195,14 +210,12 @@ module.exports.generateConsulContainerOptions = (options) => {
         'create',
         '--name', `${consulName}`,
         '--network', common.DEFAULT_NETWORK.NAME,
-        '--net', 'host',
-        // '-p', '8400:8400',
-        // '-p', '8500:8500',
-        // '-p', '8600:53/udp',
-        // '-p', '8301:8301/udp',
-        // '-p', '8302:8302/udp',
+        // '--net', 'host',
+        '-p', '8301:8301',
+        '-p', '8301:8301/udp',
+        '-p', '8500:8500',
         image,
-        'agent', '-client=0.0.0.0', '-data-dir=/tmp/consul', `-join=${consulServer}`, `-advertise=${host}`,
+        'agent', '-client=0.0.0.0', `-join=${consulServer}`, `-advertise=${host}`,
     ];
 };
 

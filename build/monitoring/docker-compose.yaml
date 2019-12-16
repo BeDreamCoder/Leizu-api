@@ -1,0 +1,59 @@
+version: '3.5'
+
+volumes:
+  prometheus-storage:
+  grafana-storage:
+
+networks:
+  metrics:
+    name: dashboard_metrics
+    driver: bridge
+
+services:
+  consul:
+    image: consul:1.6.2
+    container_name: consul
+    hostname: consul
+    ports:
+      - 8300:8300
+      - 8301:8301
+      - 8301:8301/udp
+      - 8500:8500
+    command: agent -server --bootstrap-expect=1 -advertise={external-ip} -data-dir /consul/data -config-dir /consul/config -client=0.0.0.0 -node=server01 -datacenter=dc1 --ui
+    networks:
+      - metrics
+
+  # prometheus will pull metrics from fabric
+  prometheus:
+    image: prom/prometheus:v2.14.0
+    container_name: prometheus
+    hostname: prometheus
+    restart: always
+    tty: true
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-storage:/prometheus
+    ports:
+      - 9090:9090
+    networks:
+      - metrics
+    links:
+      - consul
+
+  grafana:
+    image: grafana/grafana:6.5.2
+    container_name: grafana
+    hostname: grafana
+    environment:
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+    volumes:
+      - ./grafana/hyperledger-fabric-monitoring-for-1.4.json:/var/lib/grafana/dashboards/dashboard.json
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana-storage:/var/lib/grafana
+    ports:
+      - 3000:3000
+    networks:
+      - metrics
+    links:
+      - prometheus

@@ -15,7 +15,7 @@ module.exports.AliCloud = {
     SecurityGroupName: 'sg-zig-cloud',
     SGRuleIpProtocol: 'tcp',
     SGRulePortRanges: ['22/22', '7050/7050', '7051/7051', '7052/7052', '7053/7053', '7054/7054',
-        '2181/2181', '2888/2888', '3888/3888', '8081/8081', '8500/8500', '9092/9092', '9093/9093'],
+        '2181/2181', '2888/2888', '3888/3888', '8081/8081', '8500/8500', '9092/9092', '9093/9093', '8443/8443', '9443/9443'],
     InstanceTypeNormal: 'ecs.c5.large',
     InstanceTypeHigh: 'ecs.c5.xlarge',
     SnapshotImageId: 'm-hp37gnhlmrmj25fgnb0y',

@@ -17,7 +17,7 @@ module.exports = class CAdvisorService {
 
     static async create(params) {
         const {username, password, host, port} = params;
-        const cAdvisorName = `cadivisor-${host.replace(/\./g, '-')}`;
+        const cAdvisorName = `cadvisor-${host.replace(/\./g, '-')}`;
         const consulName = `consul-${host.replace(/\./g, '-')}`;
         let cAdvisorPort = common.PORT.CADVISOR;
 
@@ -96,4 +96,26 @@ module.exports = class CAdvisorService {
         }
     }
 
+    static async registerFabricService(service) {
+        let client = new consulClient(service.host, common.PORT.CONSUL_PORT);
+        let result = await client.querySelf();
+        let options = {
+            Datacenter: result.Datacenter,
+            Node: result.NodeID,
+            Address: service.host,
+            TaggedAddresses: {
+                lan: service.host,
+                wan: service.host
+            },
+            Service: {
+                Service: service.name,
+                Address: service.host,
+                Port: service.port
+            }
+        };
+        let res = await client.putService(options);
+        if (!res) {
+            throw new Error('service register failed');
+        }
+    }
 };

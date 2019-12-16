@@ -61,7 +61,9 @@ module.exports.PORT = {
     PEER: 7051,
     CADVISOR: 8081,
     CONSUL_PORT: 8500,
-    KAFKA_BROKER: 9092
+    KAFKA_BROKER: 9092,
+    PEER_METRICS: 9443,
+    ORDERER_METRICS: 8443,
 };
 
 module.exports.FABRIC_CFG_PATH = '/etc/hyperledger/fabric';

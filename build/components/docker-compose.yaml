@@ -1,0 +1,31 @@
+version: "3.5"
+
+volumes:
+  db-storage:
+  configtxlator-storage:
+
+networks:
+  components:
+    name: dashboard_components
+    driver: bridge
+
+services:
+  mongodb:
+    image: mongo:4
+    container_name: mongodb
+    ports:
+      - "27017:27017"
+    volumes:
+      - db-storage:/data/db
+    networks:
+      - components
+
+  configtxlator:
+    image: zhigui/configtxlator:latest
+    container_name: configtxlator
+    ports:
+      - "7059:7059"
+    volumes:
+      - configtxlator-storage:/work/data
+    networks:
+      - components

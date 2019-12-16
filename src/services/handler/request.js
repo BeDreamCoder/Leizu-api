@@ -123,13 +123,13 @@ module.exports = class RequestHandler extends Handler {
     }
 
     async provisionNetwork() {
+        if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+            await this.provisionConsul();
+        }
         await this.provisionPeerOrganizations();
         await this.provisionPeers();
         await this.provisionOrdererOrganization();
         await this.provisionOrderers();
-        if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
-            await this.provisionConsul();
-        }
         await this.createNewChannel();
         await this.makePeersJoinChannel();
     }
@@ -151,8 +151,10 @@ module.exports = class RequestHandler extends Handler {
         const consortium = await DbService.getConsortiumById(org.consortium_id);
         let certs = await this._prepareOrderersCerts(org, consortium);
         let genesisBlockPath = await this._prepareGenesisBlock(org, consortium);
+        let tlsRootCas = await this._achieveTlsRootCas();
         ordererOrg.certs = certs;
         ordererOrg.genesisBlockPath = genesisBlockPath;
+        ordererOrg.tlsRootCas = tlsRootCas;
         this.organizations.ordererOrg[orderer.orgName] = ordererOrg;
     }
 
@@ -266,6 +268,19 @@ module.exports = class RequestHandler extends Handler {
         return genesisBlockPath;
     }
 
+    async _achieveTlsRootCas() {
+        let rootCas = [];
+        for (let key in this.organizations.peerOrgs) {
+            let item = this.organizations.peerOrgs[key];
+            let org = await DbService.findOrganizationById(item._id);
+            if (!org) {
+                throw new Error('The organization does not exist: ' + item._id);
+            }
+            rootCas.push(`${org.msp_path}/msp/tlscacerts/cert.pem`);
+        }
+        return rootCas;
+    }
+
     async provisionPeers() {
         for (let item of this.parsedRequest.peers) {
             for (let node of item.nodes) {
@@ -315,6 +330,7 @@ module.exports = class RequestHandler extends Handler {
                     node.image = this.parsedRequest.ordererImage;
                     node.certs = this.organizations.ordererOrg[this.parsedRequest.orderer.orgName].certs[node.name];
                     node.genesisBlockPath = this.organizations.ordererOrg[this.parsedRequest.orderer.orgName].genesisBlockPath;
+                    node.tlsRootCas = this.organizations.ordererOrg[this.parsedRequest.orderer.orgName].tlsRootCas;
                     let provisionAction = ActionFactory.getOrdererProvisionAction(node);
                     resolve(provisionAction.execute());
                 } catch (e) {
