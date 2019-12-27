@@ -16,6 +16,9 @@ const Chaincode = require('../../models/chaincode');
 const ChaincodeRecord = require('../../models/chaincode-record');
 const AliCloud = require('../../models/alicloud');
 const Common = require('../../libraries/common');
+const InviteOrganization = require('../../models/inviteorganization');
+const User = require('../../models/user');
+const stringUtil = require('../../libraries/string-util');
 
 module.exports = class DbService {
 
@@ -233,10 +236,13 @@ module.exports = class DbService {
         organization.msp_id = dto.mspId;
         organization.admin_key = dto.adminKey;
         organization.admin_cert = dto.adminCert;
+        organization.caname = dto.caName;
+        organization.url = dto.url;
         organization.root_cert = dto.rootCert;
         organization.msp_path = dto.mspPath;
         organization.consortium_id = dto.consortiumId;
         organization.type = dto.type;
+        organization.user_id = dto.userId;
         organization = await organization.save();
         return organization;
     }
@@ -252,18 +258,20 @@ module.exports = class DbService {
     static async addCertAuthority(dto) {
         let certAuthority = new CertAuthority();
         certAuthority.uuid = uuid();
-        certAuthority.name = dto.name;
-        certAuthority.url = dto.url;
+        certAuthority.enrollment_id = dto.enrollmentID;
+        certAuthority.enrollment_secret = dto.enrollmentSecret;
+        certAuthority.role = dto.role;
+        certAuthority.keystore = dto.keystore;
+        certAuthority.signcerts = dto.signcerts;
         certAuthority.org_id = dto.orgId;
         certAuthority.consortium_id = dto.consortiumId;
-        certAuthority.enroll_id = dto.enrollId || Common.BOOTSTRAPUSER.enrollmentID;
-        certAuthority.enroll_secret = dto.enrollSecret || Common.BOOTSTRAPUSER.enrollmentSecret;
-        certAuthority = certAuthority.save();
-        return certAuthority;
+        certAuthority.profile = dto.profile;
+        certAuthority.is_root = dto.isRoot;
+        await certAuthority.save();
     }
 
-    static async findCertAuthorityByOrg(orgId) {
-        return await CertAuthority.findOne({org_id: orgId});
+    static async findCertAuthority(filter) {
+        return CertAuthority.findOne(filter);
     }
 
     static async findOrdererByConsortium(consortiumId) {
@@ -393,5 +401,30 @@ module.exports = class DbService {
 
     static async delAlicloudRecord(id) {
         await AliCloud.deleteOne({_id: id});
+    }
+
+    static async addInviteOrganization(dto) {
+        let inviteorganization = new InviteOrganization();
+        inviteorganization.uuid = uuid();
+        inviteorganization.name = dto.name;
+        inviteorganization.contactname = dto.contactname;
+        inviteorganization.inviteCode = dto.inviteCode;
+        inviteorganization.consortiumId = dto.consortiumId;
+        inviteorganization.channelId = dto.channelId;
+        inviteorganization.status = Common.INVITE_CODE_UNUSED;
+        inviteorganization = await inviteorganization.save();
+        return inviteorganization;
+    }
+
+    static async addUser(dto) {
+        let user = new User();
+        user.uuid = uuid();
+        user.username = dto.username;
+        user.password = stringUtil.generatePasswordHash(dto.password);
+        user.consortium_id = dto.consortium_id;
+        user.org_name = dto.orgName;
+        user.consortiumIDs = dto.consortiumIDs;
+        user = await user.save();
+        return user;
     }
 };

@@ -102,7 +102,7 @@ module.exports = class ConfigTxBuilder {
                 obj.Organizations.push(this._buildOrganization(org));
             }
         }
-        obj.Capabilities = {V1_1: true};
+        obj.Capabilities = this._buildCapabilitiesDefaults('Orderer');
         return obj;
     }
 
@@ -125,7 +125,50 @@ module.exports = class ConfigTxBuilder {
                 orgs.push(this._buildOrganization(org));
             }
         }
-        return {Organizations: orgs, Capabilities: {V1_2: true}};
+        let policies = this._buildPoliciesDefaults();
+        policies.Admins = {Type: 'Signature', Rule: `OR('${this._options.Admin}.admin')`};
+        return {
+            Organizations: orgs,
+            Policies: policies,
+            Capabilities: this._buildCapabilitiesDefaults('Application')
+        };
+    }
+
+    _buildPoliciesDefaults() {
+        return {
+            Readers: {Type: 'ImplicitMeta', Rule: 'ANY Readers'},
+            Writers: {Type: 'ImplicitMeta', Rule: 'ANY Readers'},
+            Admins: {Type: 'ImplicitMeta', Rule: 'ANY Readers'}
+        };
+    }
+
+    _buildCapabilitiesDefaults(section) {
+        let fabricVersion = this._options.Version;
+        if (fabricVersion === '1.2') {
+            if (section === 'Channel') {
+                return {V1_1: true};
+            } else if (section === 'Orderer') {
+                return {V1_1: true};
+            } else if (section === 'Application') {
+                return {V1_2: true, V1_1: false};
+            }
+        } else if (fabricVersion === '1.3') {
+            if (section === 'Channel') {
+                return {V1_3: true};
+            } else if (section === 'Orderer') {
+                return {V1_1: true};
+            } else if (section === 'Application') {
+                return {V1_3: true, V1_2: false, V1_1: false};
+            }
+        } else if (fabricVersion === '1.4') {
+            if (section === 'Channel') {
+                return {V1_4_3: true, V1_3: false, V1_1: false};
+            } else if (section === 'Orderer') {
+                return {V1_4_2: true, V1_1: false};
+            } else if (section === 'Application') {
+                return {V1_4_2: true, V1_3: false, V1_2: false, V1_1: false};
+            }
+        }
     }
 
     //for add new org
@@ -155,16 +198,15 @@ module.exports = class ConfigTxBuilder {
     //build configtx.yaml file for genesis block
     buildConfigtxYaml() {
         let configtx = {Profiles: {}};
+        let policies = this._buildPoliciesDefaults();
+        // policies.Admins = {Type: 'Signature', Rule: ''};
         configtx.Profiles[common.CONFIFTX_OUTPUT_GENESIS_BLOCK] = {
-            Capabilities: {V1_1: true},
+            Policies: policies,
+            Capabilities: this._buildCapabilitiesDefaults('Channel'),
             Orderer: this._buildOrderer(),
             Consortiums: this._buildConsortiums()
         };
 
-        configtx.Profiles[common.CONFIFTX_OUTPUT_CHANNEL] = {
-            Consortium: this._options.Consortium,
-            Application: this._buildApplication()
-        };
         let yamlData = yaml.safeDump(configtx);
         utils.createDir(this._filePath);
         let configTxPath = path.join(this._filePath, cryptoConfig.name);

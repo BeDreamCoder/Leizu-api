@@ -14,10 +14,12 @@ const organizationSchema = new mongoose.Schema({
     msp_id: String,
     admin_key: String,
     admin_cert: String,
+    caname: String,
+    url: String,
     root_cert: String,
     msp_path: String,
     consortium_id: mongoose.Schema.ObjectId,
-    ca_id: mongoose.Schema.ObjectId,
+    user_id: mongoose.Schema.ObjectId,
     type: {
         type: Number,
         default: 0

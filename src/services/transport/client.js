@@ -6,7 +6,7 @@ SPDX-License-Identifier: Apache-2.0
 
 'use strict';
 
-const common = require('../../libraries/common');
+const utils = require('../../libraries/utils');
 const SshClient = require('./ssh');
 const ShellClient = require('./shell');
 
@@ -18,17 +18,11 @@ module.exports = class TransportClient {
 
     static getInstance(options) {
         let client = null;
-        switch (process.env.RUN_MODE) {
-        case common.RUN_MODE.REMOTE:
+        if (utils.isStandalone()) {
+            client = new ShellClient(options);
+        } else {
             client = new SshClient(options);
-            break;
-        case common.RUN_MODE.LOCAL:
-            client = new ShellClient(options);
-            break;
-        default:
-            client = new ShellClient(options);
         }
-
         return new TransportClient(client);
     }
 
@@ -52,7 +46,7 @@ module.exports = class TransportClient {
         await this.client.transferDirectory(parameters);
     }
 
-    async setOptions(parameters){
+    async setOptions(parameters) {
         await this.client.setOptions(parameters);
     }
 

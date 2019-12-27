@@ -9,7 +9,6 @@ SPDX-License-Identifier: Apache-2.0
 const {HFCAIdentityType} = require('fabric-ca-client/lib/IdentityService');
 const ChannelService = require('./channel/channel');
 const CredentialHelper = require('./tools/credential-helper');
-const CryptoCaService = require('./tools/crypto-ca');
 const DbService = require('../db/dao');
 const FabricService = require('../db/fabric');
 const PromClient = require('../prometheus/client');
@@ -22,6 +21,7 @@ const AliCloud = require('../provider/common').AliCloud;
 const AliCloudClient = require('../provider/alicloud-client');
 const etcdctl = require('../coredns/etcdctl');
 const CAdvisorService = require('./cadvisor');
+const CaClient = require('./ca/client');
 
 module.exports = class PeerService {
 
@@ -90,7 +90,7 @@ module.exports = class PeerService {
     }
 
     static async create(params) {
-        const {organizationId, name, username, password, host, port} = params;
+        const {organizationId, name, username, password, host, port, enrollmentID, enrollmentSecret} = params;
         const org = await DbService.findOrganizationById(organizationId);
         if (!org) {
             throw new Error('The organization does not exist: ' + organizationId);
@@ -99,21 +99,26 @@ module.exports = class PeerService {
         if (org.type !== common.PEER_TYPE_PEER) {
             throw new Error('The organization type can not orderer');
         }
-        let peerNamePrefix = name ? name : 'peer';
-        const peerName = `${peerNamePrefix}-${host.replace(/\./g, '-')}`;
+        let peerName = name ? name : 'unknown-peer';
+        // const peerName = `${peerNamePrefix}-${host.replace(/\./g, '-')}`;
+        let peerHostname = `${peerName}.${org.domain_name}`;
         let peerPort = common.PORT.PEER;
-        if (utils.isSingleMachineTest()) {
+        let metricsPort = common.PORT.PEER_METRICS;
+        let cfgPath = common.FABRIC_CFG_PATH;
+        if (utils.isStandalone()) {
             peerPort = utils.generateRandomHttpPort();
+            metricsPort = utils.generateRandomHttpPort();
+            cfgPath = '/tmp/hyperledger/fabric';
         }
-        let cfgPath = process.env.RUN_MODE === common.RUN_MODE.LOCAL ? '/tmp/hyperledger/fabric' : common.FABRIC_CFG_PATH;
         let containerOptions = {
+            consortiumId: org.consortium_id,
             image: images.fabric[consortium.version].peer,
             cfgPath: `${cfgPath}/${org.consortium_id}/${org.name}/peers/${peerName}`,
             workDir: `${common.FABRIC_WORKDIR}/peer`,
-            peerName,
-            domainName: org.domain_name,
+            hostname: peerHostname,
             mspId: org.msp_id,
             port: peerPort,
+            metricsPort: metricsPort,
             enableTls: config.tlsEnabled,
             logLevel: config.fabricLogLevel
         };
@@ -124,21 +129,44 @@ module.exports = class PeerService {
             password: password,
             port: port || config.ssh.port
         };
-
-        const peerDto = await this.preContainerStart(org, peerName, containerOptions.cfgPath, connectionOptions);
-
+        let orgMgr = await DbService.findCertAuthority({
+            org_id: organizationId,
+            role: HFCAIdentityType.CLIENT,
+            is_root: false,
+        });
+        let peerAdminUser = {
+            enrollmentID: enrollmentID || `${peerName}.${org.domain_name}`,
+            enrollmentSecret: enrollmentSecret || orgMgr.enrollment_secret,
+        };
+        const peerDto = await this.preContainerStart(org, peerName, containerOptions.cfgPath, connectionOptions,
+            peerAdminUser, {enrollmentID: orgMgr.enrollment_id, enrollmentSecret: orgMgr.enrollment_secret});
         const client = Client.getInstance(connectionOptions);
         const parameters = utils.generatePeerContainerOptions(containerOptions);
         await client.checkImage(containerOptions.image);
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${peerPort}`);
         if (container) {
-            await etcdctl.createZone(`${peerName}.${org.domain_name}`, host);
+            if (!utils.isStandalone()) {
+                await etcdctl.createZone(org.consortium_id, peerHostname, host);
+                if (utils.metricsEnabled()) {
+                    await CAdvisorService.registerFabricService({
+                        host: host,
+                        name: common.NODE_TYPE_PEER,
+                        port: common.PORT.PEER_METRICS
+                    });
+                }
+            }
 
-            await CAdvisorService.registerFabricService({
-                host: host,
-                name: common.NODE_TYPE_PEER,
-                port: common.PORT.PEER_METRICS
+            await DbService.addCertAuthority({
+                enroll_id: peerAdminUser.enrollmentID,
+                enroll_secret: peerAdminUser.enrollmentSecret,
+                role: HFCAIdentityType.PEER,
+                keystore: peerDto.adminKey,
+                signcerts: peerDto.signcerts,
+                orgId: organizationId,
+                consortiumId: org.consortium_id,
+                profile: 'ca',
+                isRoot: false,
             });
 
             return await DbService.addPeer(Object.assign({}, peerDto, {
@@ -152,10 +180,10 @@ module.exports = class PeerService {
         }
     }
 
-    static async preContainerStart(org, peerName, cfgPath, connectionOptions) {
+    static async preContainerStart(org, peerName, cfgPath, connectionOptions, peerAdminUser, caAdminUser) {
         await this.createContainerNetwork(connectionOptions);
 
-        const peerDto = await this.prepareCerts(org, peerName);
+        const peerDto = await this.prepareCerts(org, peerName, peerAdminUser, caAdminUser);
         const certFile = `${peerDto.credentialsPath}.zip`;
         const remoteFile = `${cfgPath}.zip`;
         const remotePath = cfgPath;
@@ -173,23 +201,16 @@ module.exports = class PeerService {
         await Client.getInstance(connectionOptions).createContainerNetwork(parameters);
     }
 
-    static async prepareCerts(org, peerName) {
-        const ca = await DbService.findCertAuthorityByOrg(org._id);
-        const peerAdminUser = {
-            enrollmentID: `${peerName}.${org.domain_name}`,
-            enrollmentSecret: `${peerName}pw`,
-        };
-        const options = {
-            caName: ca.name,
-            orgName: org.name,
-            url: ca.url,
-            adminUser: peerAdminUser
-        };
-        const caService = new CryptoCaService(options);
-        await caService.bootstrapUserEnrollement();
-        await caService.registerAdminUser(HFCAIdentityType.PEER);
-        const mspInfo = await caService.enrollUser(peerAdminUser);
-        const tlsInfo = await caService.enrollUser(Object.assign({}, peerAdminUser, {profile: 'tls'}));
+    static async prepareCerts(org, peerName, adminUser, orgMgr) {
+        let caClient = new CaClient({url: org.url, caName: org.caname});
+        let mgr = await caClient.enroll(orgMgr.enrollmentID, orgMgr.enrollmentSecret, '');
+        await caClient.setRegistrar(orgMgr.enrollmentID, org.msp_id, mgr);
+        await caClient.registerRole(adminUser.enrollmentID, adminUser.enrollmentSecret, HFCAIdentityType.PEER,
+            org.domain_name.split(common.SEPARATOR_DOT).reverse().join(common.SEPARATOR_DOT),
+            [{name: 'role', value: 'peer:ecert'}]);
+        let mspInfo = await caClient.enroll(adminUser.enrollmentID, adminUser.enrollmentSecret, '');
+        let tlsInfo = await caClient.enroll(adminUser.enrollmentID, adminUser.enrollmentSecret, 'tls');
+
         const peerDto = {
             orgName: org.name,
             name: peerName,

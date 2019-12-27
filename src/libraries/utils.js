@@ -13,7 +13,7 @@ const fs = require('fs');
 const isReachable = require('is-reachable');
 const moment = require('moment');
 const logger = require('log4js').getLogger();
-const coredns = require('../env').coredns;
+const config = require('../env');
 
 module.exports.wait = async (resources) => {
     logger.info('waiting for resources ready: ', resources);
@@ -50,37 +50,22 @@ module.exports.extend = (target, source) => {
     return target;
 };
 
-module.exports.asyncForEach = async (array, callback) => {
-    let results = [];
-    for (let index = 0; index < array.length; index++) {
-        let result = await callback(array[index], index, array);
-        results.push(result);
-    }
-    return results;
-};
-
-module.exports.generateDomainName = (prefixName) => {
-    let parts = [];
-    parts.push(prefixName);
-    parts.push(common.BASE_DOMAIN_NAME);
-    return parts.join(common.SEPARATOR_DOT);
-};
 
 module.exports.generateCAContainerOptions = (options) => {
     return [
         'create',
-        '--name', 'ca-' + options.name,
+        '--name', options.caName,
         '-e', 'GODEBUG=netdns=go',
         '-e', `FABRIC_CA_SERVER_HOME=${common.CA_CFG_PATH}`,
-        '-e', 'FABRIC_CA_SERVER_CA_NAME=ca-' + options.name,
-        '-e', `FABRIC_CA_SERVER_CSR_CN=ca.${options.domainName}`,
+        '-e', `FABRIC_CA_SERVER_CA_NAME=${options.caName}`,
+        '-e', `FABRIC_CA_SERVER_CSR_CN=${options.caName}`,
+        '-e', `FABRIC_CA_SERVER_TLS_ENABLED=${options.tlsEnabled}`,
         '-p', options.port + ':7054',
-        '--dns', process.env.COREDNS_HOST || coredns,
-        '--dns-search', common.BASE_DOMAIN_NAME,
         '-v', `${options.cfgPath}:${common.CA_CFG_PATH}`,
         options.image,
         '/bin/bash', '-c',
-        'fabric-ca-server start -b admin:adminpw -d'
+        'fabric-ca-server start -b ' + `${options.enrollmentID}:${options.enrollmentSecret}` + ' ' +
+        '--cfg.affiliations.allowremove --cfg.identities.allowremove -d'
     ];
 };
 
@@ -95,28 +80,33 @@ module.exports.generateContainerNetworkOptions = (options) => {
 };
 
 module.exports.generatePeerContainerOptions = (options) => {
-    const {image, peerName, domainName, mspId, port, cfgPath, workDir, enableTls, logLevel} = options;
-    let peerId = `${peerName}.${domainName}`;
+    const {consortiumId, image, hostname, mspId, port, metricsPort, cfgPath, workDir, enableTls, logLevel} = options;
+
+    let metricsEnv = [];
+    if (this.metricsEnabled()) {
+        metricsEnv.push.apply(metricsEnv, ['-p', `${metricsPort}:9443`,
+            '-e', 'CORE_METRICS_PROVIDER=prometheus',
+            '-e', `CORE_OPERATIONS_LISTENADDRESS=${hostname}:9443`]);
+    }
     return [
         'create',
-        '--name', peerId,
-        '--hostname', peerId,
+        '--name', hostname,
+        '--hostname', hostname,
         '--network', common.DEFAULT_NETWORK.NAME,
         '-p', `${port}:7051`,
-        '-p', '9443:9443',
         '-w', workDir,
         '-e', 'CORE_VM_ENDPOINT=unix:///var/run/docker.sock',
         '-e', 'CORE_VM_DOCKER_ATTACHSTDOUT=true',
         '-e', `CORE_VM_DOCKER_HOSTCONFIG_NETWORKMODE=${common.DEFAULT_NETWORK.NAME}`,
         '-e', 'GODEBUG=netdns=go',
-        '-e', `CORE_PEER_ID=${peerId}`,
-        '-e', `CORE_PEER_ADDRESS=${peerId}:7051`,
+        '-e', `CORE_PEER_ID=${hostname}`,
+        '-e', `CORE_PEER_ADDRESS=${hostname}:7051`,
         '-e', 'CORE_PEER_LISTENADDRESS=0.0.0.0:7051',
-        '-e', `CORE_PEER_CHAINCODEADDRESS=${peerId}:7052`,
+        '-e', `CORE_PEER_CHAINCODEADDRESS=${hostname}:7052`,
         '-e', 'CORE_PEER_CHAINCODELISTENADDRESS=0.0.0.0:7052',
         '-e', `CORE_PEER_LOCALMSPID=${mspId}`,
         '-e', `CORE_PEER_MSPCONFIGPATH=${common.FABRIC_CFG_PATH}/msp`,
-        '-e', `CORE_PEER_GOSSIP_EXTERNALENDPOINT=${peerId}:7051`,
+        '-e', `CORE_PEER_GOSSIP_EXTERNALENDPOINT=${hostname}:7051`,
         '-e', 'CORE_PEER_GOSSIP_ORGLEADER=false',
         '-e', 'CORE_PEER_GOSSIP_USELEADERELECTION=true',
         '-e', `CORE_PEER_TLS_ENABLED=${enableTls}`,
@@ -126,37 +116,42 @@ module.exports.generatePeerContainerOptions = (options) => {
         // '-e', 'CORE_PEER_TLS_CLIENTAUTHREQUIRED=true',
         // '-e', `CORE_PEER_TLS_CLIENTROOTCAS_FILES=${common.FABRIC_CFG_PATH}/tls/ca.pem`,
         '-e', `CORE_LOGGING_LEVEL=${logLevel}`,
-        '-e', `FABRIC_LOGGING_SPEC=${logLevel}`,
-        '-e', 'CORE_METRICS_PROVIDER=prometheus',
-        '-e', `CORE_OPERATIONS_LISTENADDRESS=${peerId}:9443`,
+        '-e', `FABRIC_LOGGING_SPEC=${logLevel}`].concat(metricsEnv).concat([
         '-v', '/var/run:/var/run',
         '-v', `${cfgPath}/msp:${common.FABRIC_CFG_PATH}/msp`,
         '-v', `${cfgPath}/tls:${common.FABRIC_CFG_PATH}/tls`,
-        '--dns', process.env.COREDNS_HOST || coredns,
-        '--dns-search', common.BASE_DOMAIN_NAME,
+        '--dns', process.env.COREDNS_HOST || config.coredns,
+        '--dns-search', consortiumId,
         image,
         '/bin/bash', '-c', 'peer node start',
-    ];
+    ]);
 };
 
 module.exports.generateOrdererContainerOptions = (options) => {
-    const {image, ordererName, domainName, mspId, port, cfgPath, workDir, enableTls, logLevel, tlsRootCas} = options;
+    const {
+        consortiumId, image, hostname, mspId, port, metricsPort,
+        cfgPath, workDir, enableTls, logLevel, tlsRootCas
+    } = options;
     let ordererCfgPath = `${common.FABRIC_CFG_PATH}/orderer`;
-
     let cas = [];
     for (let key in tlsRootCas) {
         cas.push(`${ordererCfgPath}/tlsrootcas/ca${key}.crt`);
     }
     cas.push(`${ordererCfgPath}/msp/tlscacerts/cert.pem`);
 
+    let metricsEnv = [];
+    if (this.metricsEnabled()) {
+        metricsEnv.push.apply(metricsEnv, ['-p', `${metricsPort}:8443`,
+            '-e', 'ORDERER_METRICS_PROVIDER=prometheus',
+            '-e', `ORDERER_OPERATIONS_LISTENADDRESS=${hostname}:8443`]);
+    }
     return [
         'create',
-        '--name', `${ordererName}.${domainName}`,
-        '--hostname', `${ordererName}.${domainName}`,
+        '--name', hostname,
+        '--hostname', hostname,
         '--network', common.DEFAULT_NETWORK.NAME,
         '-w', workDir,
         '-p', `${port}:7050`,
-        '-p', '8443:8443',
         '-e', 'GODEBUG=netdns=go',
         '-e', `ORDERER_GENERAL_LOGLEVEL=${logLevel}`,
         '-e', `FABRIC_LOGGING_SPEC=${logLevel}`,
@@ -173,19 +168,17 @@ module.exports.generateOrdererContainerOptions = (options) => {
         // '-e', `ORDERER_GENERAL_TLS_CLIENTROOTCAS=[${ordererCfgPath}/msp/tlscacerts/cert.pem]`,
         '-e', `ORDERER_GENERAL_CLUSTER_CLIENTCERTIFICATE=${ordererCfgPath}/tls/server.crt`,
         '-e', `ORDERER_GENERAL_CLUSTER_CLIENTPRIVATEKEY=${ordererCfgPath}/tls/server.key`,
-        '-e', `ORDERER_GENERAL_CLUSTER_ROOTCAS=[${cas}]`,
-        '-e', 'ORDERER_METRICS_PROVIDER=prometheus',
-        '-e', `ORDERER_OPERATIONS_LISTENADDRESS=${ordererName}.${domainName}:8443`,
+        '-e', `ORDERER_GENERAL_CLUSTER_ROOTCAS=[${cas}]`].concat(metricsEnv).concat([
         '-v', '/var/run:/var/run',
         '-v', `${cfgPath}/msp:${ordererCfgPath}/msp`,
         '-v', `${cfgPath}/tls:${ordererCfgPath}/tls`,
         '-v', `${cfgPath}/tlsrootcas:${ordererCfgPath}/tlsrootcas`,
         '-v', `${cfgPath}/genesis.block:${ordererCfgPath}/genesis.block`,
-        '--dns', process.env.COREDNS_HOST || coredns,
-        '--dns-search', common.BASE_DOMAIN_NAME,
+        '--dns', process.env.COREDNS_HOST || config.coredns,
+        '--dns-search', consortiumId,
         image,
         '/bin/bash', '-c', 'orderer',
-    ];
+    ]);
 };
 
 module.exports.generateCadvisorContainerOptions = (options) => {
@@ -260,8 +253,12 @@ module.exports.generateRandomInteger = (low, high) => {
     return Math.floor(Math.random() * (high - low) + low);
 };
 
-module.exports.isSingleMachineTest = () => {
-    return process.env.ALL_IN_ONE === 'true';
+module.exports.isStandalone = () => {
+    return (process.env.RUN_MODE || config.runMode) === common.RUN_MODE.STANDALONE;
+};
+
+module.exports.metricsEnabled = () => {
+    return (process.env.METRICS_ENABLED || config.metricsEnabled) === true;
 };
 
 module.exports.makeHostRecord = (hostName, ipAddress) => {

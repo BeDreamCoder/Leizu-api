@@ -19,6 +19,7 @@ module.exports = class ChannelService {
         this._channel_name = channelName;
         this._consortium_id = '';
         this._consortium_name = '';
+        this._fabric_version = '';
     }
 
     static async getInstance(organizationId, channelId) {
@@ -43,6 +44,7 @@ module.exports = class ChannelService {
                 // this._network_config = JSON.parse(consortium.network_config);
                 this._consortium_id = organization.consortium_id.toString();
                 this._consortium_name = consortium.name;
+                this._fabric_version = consortium.version;
             } else {
                 throw new Error('The consortium does not exist.');
             }
@@ -98,7 +100,9 @@ module.exports = class ChannelService {
         let channelCreateTx = {
             Consortium: this._consortium_name,
             ConsortiumId: this._consortium_id,
-            Organizations: organizations
+            Organizations: organizations,
+            Version: this._fabric_version,
+            Admin: this._organization.msp_id,
         };
         return CreateChannel.createChannel(channelCreateTx, this._channel_name, this._organization);
     }

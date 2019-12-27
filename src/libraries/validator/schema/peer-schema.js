@@ -9,18 +9,18 @@ SPDX-License-Identifier: Apache-2.0
 const Joi = require('joi');
 const {objectId, string, ip, port, unRequiredObjectId} = require('./schema-utils');
 // const config = require('../../../env');
+const utils = require('../../utils');
 const common = require('../../common');
 
 const bareSchema = () => {
-    if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+    if (!utils.isStandalone()) {
         return {
             host: ip,
             username: string,
             password: string,
             port: port
         };
-    }
-    else {
+    } else {
         return {
             host: Joi.string().valid('127.0.0.1').required(),
             username: Joi.any().forbidden(),

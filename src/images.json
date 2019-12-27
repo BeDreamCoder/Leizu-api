@@ -5,27 +5,27 @@
       "orderer": "hyperledger/fabric-orderer:1.2.1",
       "ca": "hyperledger/fabric-ca:1.2.1",
       "ccenv": "hyperledger/fabric-ccenv:1.2.1",
-      "couchdb": "hyperledger/fabric-couchdb:0.4.15",
-      "zookeeper": "hyperledger/fabric-zookeeper:0.4.15",
-      "kafka": "hyperledger/fabric-kafka:0.4.15"
+      "couchdb": "hyperledger/fabric-couchdb:0.4.10",
+      "zookeeper": "hyperledger/fabric-zookeeper:0.4.10",
+      "kafka": "hyperledger/fabric-kafka:0.4.10"
     },
     "1.3": {
       "peer": "hyperledger/fabric-peer:1.3.0",
       "orderer": "hyperledger/fabric-orderer:1.3.0",
       "ca": "hyperledger/fabric-ca:1.3.0",
       "ccenv": "hyperledger/fabric-ccenv:1.3.0",
-      "couchdb": "hyperledger/fabric-couchdb:0.4.15",
-      "zookeeper": "hyperledger/fabric-zookeeper:0.4.15",
-      "kafka": "hyperledger/fabric-kafka:0.4.15"
+      "couchdb": "hyperledger/fabric-couchdb:0.4.13",
+      "zookeeper": "hyperledger/fabric-zookeeper:0.4.13",
+      "kafka": "hyperledger/fabric-kafka:0.4.13"
     },
     "1.4": {
-      "peer": "hyperledger/fabric-peer:1.4.1",
-      "orderer": "hyperledger/fabric-orderer:1.4.1",
-      "ca": "hyperledger/fabric-ca:1.4.1",
-      "ccenv": "hyperledger/fabric-ccenv:1.4.1",
-      "couchdb": "hyperledger/fabric-couchdb:0.4.15",
-      "zookeeper": "hyperledger/fabric-zookeeper:0.4.15",
-      "kafka": "hyperledger/fabric-kafka:0.4.15"
+      "peer": "hyperledger/fabric-peer:1.4.4",
+      "orderer": "hyperledger/fabric-orderer:1.4.4",
+      "ca": "hyperledger/fabric-ca:1.4.4",
+      "ccenv": "hyperledger/fabric-ccenv:1.4.4",
+      "couchdb": "hyperledger/fabric-couchdb:0.4.18",
+      "zookeeper": "hyperledger/fabric-zookeeper:0.4.18",
+      "kafka": "hyperledger/fabric-kafka:0.4.18"
     }
   },
   "middleware": {

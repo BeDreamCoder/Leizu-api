@@ -23,9 +23,9 @@ class EtcdCtl {
         });
     }
 
-    async createZone(domain, host) {
+    async createZone(consortiumId, domain, host) {
         const parts = domain.split('.');
-        let key = '/skydns';
+        let key = '/skydns/' + consortiumId;
         for (let i = parts.length - 1; i >= 0; --i) {
             key += '/' + parts[i];
         }
@@ -42,7 +42,6 @@ class EtcdCtl {
             return Promise.reject(error);
         });
     }
-
-};
+}
 
 module.exports = new EtcdCtl(process.env.ETCD_CLUSTER_URI || etcdCluster.url);

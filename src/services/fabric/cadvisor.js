@@ -17,8 +17,8 @@ module.exports = class CAdvisorService {
 
     static async create(params) {
         const {username, password, host, port} = params;
-        const cAdvisorName = `cadvisor-${host.replace(/\./g, '-')}`;
-        const consulName = `consul-${host.replace(/\./g, '-')}`;
+        const cAdvisorName = 'cadvisor';
+        const consulName = 'consul-client';
         let cAdvisorPort = common.PORT.CADVISOR;
 
         let containerOptions = {
@@ -34,8 +34,10 @@ module.exports = class CAdvisorService {
         };
 
         const client = Client.getInstance(connectionOptions);
-        const parameters = utils.generateCadvisorContainerOptions(containerOptions);
+        const networkOptions = utils.generateContainerNetworkOptions({name: common.DEFAULT_NETWORK.NAME});
+        await client.createContainerNetwork(networkOptions);
         await client.checkImage(containerOptions.image);
+        const parameters = utils.generateCadvisorContainerOptions(containerOptions);
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${cAdvisorPort}`);
         if (!container) {
@@ -60,7 +62,7 @@ module.exports = class CAdvisorService {
         }
         let filebeatOptions = {
             image: images.middleware.filebeat,
-            filebeatName: `filebeat-${host.replace(/\./g, '-')}`,
+            filebeatName: 'filebeat',
             elasticsearchHost: process.env.ELASTICSEARCH_HOST ||
                 `${config.elasticsearch.host}:${config.elasticsearch.port}`,
         };

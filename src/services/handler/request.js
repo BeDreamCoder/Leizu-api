@@ -123,7 +123,7 @@ module.exports = class RequestHandler extends Handler {
     }
 
     async provisionNetwork() {
-        if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+        if (!utils.isStandalone() && utils.metricsEnabled()) {
             await this.provisionConsul();
         }
         await this.provisionPeerOrganizations();
@@ -165,7 +165,8 @@ module.exports = class RequestHandler extends Handler {
         }
         let orderersCerts = {};
         for (let item of orderers) {
-            const ordererName = `${item.name}-${item.host.replace(/\./g, '-')}`;
+            // const ordererName = `${item.name}-${item.host.replace(/\./g, '-')}`;
+            const ordererName = item.name;
             let ordererDto = await OrdererService.prepareCerts(org, consortium, ordererName);
             orderersCerts[item.name] = ordererDto;
             // orderer tls cert for ectdraft
@@ -179,11 +180,9 @@ module.exports = class RequestHandler extends Handler {
         // Addresses
         let addresses = [];
         for (let node of configuration.ordererOrg.orderer) {
-            let ordererName = `${node.name}-${node.ip.replace(/\./g, '-')}`;
+            // let ordererName = `${node.name}-${node.ip.replace(/\./g, '-')}`;
+            let ordererName = node.name;
             let ordererPort = common.PORT.ORDERER;
-            if (utils.isSingleMachineTest()) {
-                ordererPort = utils.generateRandomHttpPort();
-            }
             if (config.tlsEnabled) {
                 addresses.push(`${ordererName}.${org.domain_name}:${ordererPort}`);
             } else {
@@ -205,11 +204,9 @@ module.exports = class RequestHandler extends Handler {
         if (configuration.consensus === common.CONSENSUS_RAFT) {
             let consenters = [];
             for (let node of configuration.ordererOrg.orderer) {
-                let ordererName = `${node.name}-${node.ip.replace(/\./g, '-')}`;
+                // let ordererName = `${node.name}-${node.ip.replace(/\./g, '-')}`;
+                let ordererName = node.name;
                 let ordererPort = common.PORT.ORDERER;
-                if (utils.isSingleMachineTest()) {
-                    ordererPort = utils.generateRandomHttpPort();
-                }
                 // if (config.tlsEnabled) {
                 consenters.push({name: ordererName, host: `${ordererName}.${org.domain_name}`, port: ordererPort});
                 // } else {
@@ -257,7 +254,8 @@ module.exports = class RequestHandler extends Handler {
                 },
                 EtcdRaft: etcdRaft
             },
-            Organizations: organizations
+            Organizations: organizations,
+            Version: consortium.version
         };
 
         let configTxYaml = new CreateConfigTx(options).buildConfigtxYaml();
@@ -287,6 +285,7 @@ module.exports = class RequestHandler extends Handler {
                 let organization = this.organizations.peerOrgs[node.orgName];
                 node.organizationId = organization._id;
                 node.image = this.parsedRequest.peerImage;
+                node.consortiumName = this.parsedRequest.name;
                 let provisionAction = ActionFactory.getPeerProvisionAction(node);
                 this.peers[node.name] = await provisionAction.execute();
             }

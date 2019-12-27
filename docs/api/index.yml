@@ -119,6 +119,56 @@ paths:
           description: Unauthorized
           schema:
             $ref: "user.yml#/Error"
+  /user/invite:
+    post:
+      tags:
+        - user
+      summary: Create inviteCode
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: inviteorganization
+          description: Create inviteCode
+          required: true
+          schema:
+            $ref: "user.yml#/InviteOrganization"
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "user.yml#/InviteResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "user.yml#/Error"
+  /user/register:
+    post:
+      tags:
+        - user
+      summary: User register
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: register
+          description: register account
+          required: true
+          schema:
+            $ref: "user.yml#/Register"
+      responses:
+        200:
+          description: OK
+          schema:
+            $ref: "user.yml#/RegisterResponse"
+        401:
+          description: Unauthorized
+          schema:
+            $ref: "user.yml#/Error"
   /peer/{consortiumId}:
     get:
       tags:
@@ -323,6 +373,29 @@ paths:
       responses:
         200:
           description: OK
+  /organization/invite:
+    post:
+      tags:
+        - organization
+      summary: inivte organization create ca and peer
+      consumes:
+        - application/json
+      produces:
+        - application/json
+      parameters:
+        - in: body
+          name: invite
+          description: inivte organization create ca and peer
+          required: true
+          schema:
+            $ref: "organization.yml#/Inivte"
+      responses:
+          200:
+            description: OK
+          401:
+            description: Unauthorized
+            schema:
+              $ref: common.yml#/401Error
   /channel/{consortiumId}:
     get:
       tags:

@@ -32,6 +32,13 @@ module.exports.REQUEST_STATUS_RUNNING = 'running';
 module.exports.REQUEST_STATUS_SUCCESS = 'success';
 module.exports.REQUEST_STATUS_ERROR = 'error';
 
+module.exports.INVITE_CODE_USED = 'used';
+module.exports.INVITE_CODE_UNUSED = 'unused';
+
+module.exports.CONSORTIUM_ADMIN = 'con_admin';
+module.exports.ORGANIZATION_ADMIN = 'org_admin';
+module.exports.PLATFORM_ADMIN = 'platform_admin';
+
 module.exports.BOOTSTRAPUSER = {
     enrollmentID: 'admin',
     enrollmentSecret: 'adminpw'
@@ -76,10 +83,11 @@ module.exports.PORT_CA = 7080;
 module.exports.PORT_ORDERER = 7050;
 module.exports.PORT_PEER = 7051;
 
-module.exports.BASE_DOMAIN_NAME = 'example.com';
+module.exports.BASE_AFFILIATION = 'com';
 
 module.exports.NODE_TYPE_PEER = 'peer';
 module.exports.NODE_TYPE_ORDERER = 'orderer';
+module.exports.NODE_TYPE_CA = 'ca';
 
 //validator allow values
 module.exports.DB_TYPE_LEVELDB = 'leveldb';
@@ -117,8 +125,8 @@ module.exports.CHAINCODE_UPGRADE = 'upgrade';
 module.exports.REQUEST_TIMEOUT_UNLIMITED = 0;
 
 module.exports.RUN_MODE = {
-    LOCAL: 'local',
-    REMOTE: 'remote'
+    STANDALONE: 'standalone',
+    DISTRIBUTED: 'distributed'
 };
 
 module.exports.CADVISOR_SERVICE_NAME = 'cadvisor';

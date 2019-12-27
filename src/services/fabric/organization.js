@@ -12,7 +12,6 @@ const utils = require('../../libraries/utils');
 const images = require('../../images');
 const stringUtil = require('../../libraries/string-util');
 const CredentialHelper = require('./tools/credential-helper');
-const CryptoCaService = require('./tools/crypto-ca');
 const DbService = require('../db/dao');
 const Client = require('../transport/client');
 const configtxlator = require('./tools/configtxlator');
@@ -20,11 +19,13 @@ const AliCloud = require('../provider/common').AliCloud;
 const AliCloudClient = require('../provider/alicloud-client');
 const config = require('../../env');
 const etcdctl = require('../coredns/etcdctl');
+const CaClient = require('./ca/client');
+const {HFCAIdentityType} = require('fabric-ca-client/lib/IdentityService');
 
 module.exports = class OrganizationService {
 
     static async create(payload) {
-        const {name, type, consortiumId, domainName, host, port, username, password} = payload;
+        const {name, type, consortiumId, host, port, username, password, enrollmentID, enrollmentSecret, userId} = payload;
         let consortium = await DbService.getConsortiumById(consortiumId);
         if (!consortium) {
             throw  new Error('The consortium not exist');
@@ -34,33 +35,48 @@ module.exports = class OrganizationService {
             throw  new Error('The organization name already exists.');
         }
 
+        let domainName = [name, consortium.name.toLowerCase(), common.BASE_AFFILIATION].join(common.SEPARATOR_DOT);
+        let caUrl;
+        let caPort = common.PORT.CA;
+        if (utils.isStandalone()) {
+            caPort = utils.generateRandomHttpPort();
+        }
+        if (config.tlsEnabled === true) {
+            caUrl = common.PROTOCOL.HTTPS + '://' + host + ':' + caPort;
+        } else {
+            caUrl = common.PROTOCOL.HTTP + '://' + host + ':' + caPort;
+        }
         let orgDto = {
             orgName: name,
             domainName: domainName,
             mspId: stringUtil.getMspId(name),
             consortiumId: consortiumId,
-            type: type ? type : common.PEER_TYPE_PEER
+            type: type ? type : common.PEER_TYPE_PEER,
+            userId: userId,
+            enrollmentID: enrollmentID || common.BOOTSTRAPUSER.enrollmentID,
+            enrollmentSecret: enrollmentSecret || common.BOOTSTRAPUSER.enrollmentSecret,
+            caName: `ca.${domainName}`,
+            url: caUrl,
         };
-        let caPort = common.PORT.CA;
-        if (utils.isSingleMachineTest()) {
-            caPort = utils.generateRandomHttpPort();
-        }
+
         try {
-            let cfgPath = process.env.RUN_MODE === common.RUN_MODE.LOCAL ? '/tmp/hyperledger/fabric-ca-server' : common.CA_CFG_PATH;
+            let cfgPath = utils.isStandalone() ? '/tmp/hyperledger/fabric-ca-server' : common.CA_CFG_PATH;
             const containerOptions = {
+                consortiumId: consortiumId,
                 image: images.fabric[consortium.version].ca,
-                name: name,
-                domainName: domainName,
+                caName: orgDto.caName,
                 port: caPort,
-                enableTls: config.tlsEnabled,
+                tlsEnabled: config.tlsEnabled,
                 cfgPath: `${cfgPath}/${consortiumId}/${name}`,
+                enrollmentID: orgDto.enrollmentID,
+                enrollmentSecret: orgDto.enrollmentSecret,
             };
 
             const connectOptions = {
                 username: username,
                 password: password,
                 host: host,
-                port: port
+                port: port || config.ssh.port
             };
             const parameters = utils.generateCAContainerOptions(containerOptions);
 
@@ -68,35 +84,54 @@ module.exports = class OrganizationService {
             await client.checkImage(containerOptions.image);
             let container = await client.createContainer(parameters);
             if (container) {
-                let options = {
-                    caName: stringUtil.getCaName(name),
-                    orgName: name,
-                    url: stringUtil.getUrl(common.PROTOCOL.HTTP, host, caPort)
-                };
-                await utils.wait(`${options.url}/api/v1/cainfo`);
-                let cryptoCaService = new CryptoCaService(options);
-                let result = await cryptoCaService.postContainerStart();
-                if (result) {
-                    orgDto.adminKey = result.enrollment.key.toBytes();
-                    orgDto.adminCert = result.enrollment.certificate;
-                    orgDto.signcerts = result.enrollment.certificate;
-                    orgDto.rootCert = result.enrollment.rootCertificate;
-                    orgDto.tlsRootCert = result.enrollment.rootCertificate;
-                    orgDto.mspPath = await CredentialHelper.storeOrgCredentials(orgDto);
-                }
-                let organization = await DbService.addOrganization(orgDto);
-                if (organization) {
-                    await DbService.addCertAuthority({
-                        name: options.caName,
-                        url: options.url,
-                        orgId: organization._id,
-                        consortiumId: consortiumId
-                    });
-                    // transfer certs file to configtxlator for update channel
-                    await configtxlator.upload(`./data/${orgDto.consortiumId}/${orgDto.orgName}/`, `${orgDto.mspPath}.zip`);
-                    fs.unlinkSync(`${orgDto.mspPath}.zip`);
+                await utils.wait(`${common.PROTOCOL.TCP}:${host}:${caPort}`);
+                // await utils.wait(`${options.url}/api/v1/cainfo`);
 
-                    await etcdctl.createZone(orgDto.domainName, host);
+                let caClient = new CaClient({url: caUrl, caName: orgDto.caName});
+                let caRoot = await caClient.enroll(orgDto.enrollmentID, orgDto.enrollmentSecret, '');
+                await caClient.setRegistrar(orgDto.enrollmentID, orgDto.mspId, caRoot);
+                await caClient.deleteDefaultAffiliation();
+                await caClient.addAffiliation(common.BASE_AFFILIATION);
+                await caClient.addAffiliation([common.BASE_AFFILIATION, consortium.name.toLowerCase()].join(common.SEPARATOR_DOT));
+                await caClient.addAffiliation([common.BASE_AFFILIATION, consortium.name.toLowerCase(), name].join(common.SEPARATOR_DOT));
+                await caClient.registerAffiliationMgr(`Admin@${domainName}`, orgDto.enrollmentSecret,
+                    [common.BASE_AFFILIATION, consortium.name.toLowerCase(), name].join(common.SEPARATOR_DOT), []);
+                let orgAdmin = await caClient.enroll(`Admin@${domainName}`, orgDto.enrollmentSecret, '');
+                orgDto.adminKey = orgAdmin.key.toBytes();
+                orgDto.adminCert = orgAdmin.certificate;
+                orgDto.signcerts = orgAdmin.certificate;
+                orgDto.rootCert = orgAdmin.rootCertificate;
+                orgDto.tlsRootCert = orgAdmin.rootCertificate;
+                orgDto.mspPath = await CredentialHelper.storeOrgCredentials(orgDto);
+
+                let organization = await DbService.addOrganization(orgDto);
+                await DbService.addCertAuthority({
+                    enrollmentID: orgDto.enrollmentID,
+                    enrollmentSecret: orgDto.enrollmentSecret,
+                    role: HFCAIdentityType.CLIENT,
+                    keystore: '',
+                    signcerts: caRoot.rootCertificate,
+                    orgId: organization._id,
+                    consortiumId: consortiumId,
+                    profile: 'ca',
+                    isRoot: true,
+                });
+                await DbService.addCertAuthority({
+                    enrollmentID: `Admin@${domainName}`,
+                    enrollmentSecret: orgDto.enrollmentSecret,
+                    role: HFCAIdentityType.CLIENT,
+                    keystore: orgAdmin.key.toBytes(),
+                    signcerts: orgAdmin.certificate,
+                    orgId: organization._id,
+                    consortiumId: consortiumId,
+                    profile: 'ca',
+                    isRoot: false,
+                });
+                // transfer certs file to configtxlator for update channel
+                await configtxlator.upload(`./data/${orgDto.consortiumId}/${orgDto.orgName}/`, `${orgDto.mspPath}.zip`);
+                fs.unlinkSync(`${orgDto.mspPath}.zip`);
+                if (!utils.isStandalone()) {
+                    await etcdctl.createZone(consortiumId, orgDto.domainName, host);
                 }
                 return organization;
             }

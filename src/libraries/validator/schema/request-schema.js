@@ -8,10 +8,11 @@ SPDX-License-Identifier: Apache-2.0
 
 const Joi = require('joi');
 const {string, ip, cloudSchema} = require('./schema-utils');
+const utils = require('../../utils');
 const Common = require('../../common');
 
 const bareSchema = () => {
-    if (process.env.RUN_MODE === Common.RUN_MODE.REMOTE) {
+    if (!utils.isStandalone()) {
         return {
             name: string,
             ip: ip,

@@ -7,7 +7,9 @@ SPDX-License-Identifier: Apache-2.0
 module.exports = {
     fabricLogLevel: 'info',
     tlsEnabled: true,
+    metricsEnabled: false,
     koaLogger: true,
+    runMode: 'standalone', // 'standalone' or 'distributed'
     jwt: {
         secret: '`yGE[RniLYCX6rCni>DKG_(3#si&zvA$WPmgrb2P',
         expiresIn: 36000

@@ -8,27 +8,19 @@ SPDX-License-Identifier: Apache-2.0
 
 const Action = require('./action');
 const utils = require('../../libraries/utils');
-const common = require('../../libraries/common');
 const PeerService = require('../fabric/peer');
 
 module.exports = class PeerProvisionAction extends Action {
-
-    constructor(){
+    constructor() {
         super();
     }
 
-    async execute(){
+    async execute() {
         let params = this.context.get(this.registry.CONTEXT.PARAMS);
         let options = {
             name: params.name,
-            domainName: utils.generateDomainName(params.name),
-            peerPort: common.PORT.PEER
         };
-        utils.extend(options,params);
-        if(this.isDebugMode){
-            options.peerPort = utils.generateRandomHttpPort();
-        }
+        utils.extend(options, params);
         return await PeerService.create(options);
     }
-
 };

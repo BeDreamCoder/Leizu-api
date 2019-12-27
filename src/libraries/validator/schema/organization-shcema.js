@@ -8,18 +8,20 @@ SPDX-License-Identifier: Apache-2.0
 
 const Joi = require('joi');
 const {objectId, string, hostname, ip, port} = require('./schema-utils');
+const utils = require('../../utils');
 const common = require('../../common');
+const userNameSchema = Joi.string().min(4).max(50).required();
+const passwordSchema = Joi.string().min(4).max(20).required();
 
 const bareSchema = () => {
-    if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+    if (!utils.isStandalone()) {
         return {
             host: ip,
             username: string,
             password: string,
             port: port
         };
-    }
-    else {
+    } else {
         return {
             host: Joi.string().valid('127.0.0.1').required(),
             username: Joi.any().forbidden(),
@@ -39,14 +41,64 @@ module.exports.bareOrganizationSchema = Joi.object().keys(Object.assign({
     mode: Joi.string().valid([common.RUNMODE_BARE]).required(),
     name: string,
     domainName: hostname,
-    consortiumId: objectId
+    consortiumId: objectId,
 }, bareSchema()));
 
 module.exports.cloudOrganizationSchema = Joi.object().keys(Object.assign({
     mode: Joi.string().valid([common.RUNMODE_CLOUD]).required(),
     name: string,
     domainName: hostname,
-    consortiumId: objectId
+    consortiumId: objectId,
 }, cloudSchema));
 
+module.exports.registerBareOrganizationSchema = Joi.object().keys(Object.assign({
+    mode: Joi.string().valid([common.RUNMODE_BARE]).required(),
+    name: string,
+    domainName: hostname,
+    consortiumId: objectId,
+    enrollmentID: userNameSchema,
+    enrollmentSecret: passwordSchema,
+    reEnrollmentSecret: passwordSchema,
+    inviteCode: Joi.string().regex(/^[a-zA-Z0-9]{6}$/)
+}, bareSchema()));
 
+module.exports.registerCloudOrganizationSchema = Joi.object().keys(Object.assign({
+    mode: Joi.string().valid([common.RUNMODE_CLOUD]).required(),
+    name: string,
+    domainName: hostname,
+    consortiumId: objectId,
+    enrollmentID: userNameSchema,
+    enrollmentSecret: passwordSchema,
+    reEnrollmentSecret: passwordSchema,
+    inviteCode: Joi.string().regex(/^[a-zA-Z0-9]{6}$/),
+}, cloudSchema));
+
+module.exports.bareInviteOrganizationSchema = Joi.object().keys({
+    mode: Joi.string().valid([common.RUNMODE_BARE]).required(),
+    org: Joi.object().keys(Object.assign({
+        name: string,
+        domainName: hostname,
+        enrollementID: string,
+        enrollmentSecret: string,
+    }, bareSchema())).required(),
+    peers: Joi.array().min(1).items(Joi.object().keys(Object.assign({
+        name: string,
+        enrollementID: string,
+        enrollmentSecret: string
+    }, bareSchema()))).required()
+});
+
+module.exports.cloudInviteOrganizationSchema = Joi.object().keys({
+    mode: Joi.string().valid([common.RUNMODE_CLOUD]).required(),
+    org: Joi.object().keys(Object.assign({
+        name: string,
+        domainName: hostname,
+        enrollementID: string,
+        enrollmentSecret: string
+    }, cloudSchema)),
+    peers: Joi.array().min(1).items(Joi.object().keys(Object.assign({
+        name: string,
+        enrollementID: string,
+        enrollmentSecret: string
+    }, cloudSchema)))
+});

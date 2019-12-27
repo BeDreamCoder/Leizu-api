@@ -7,27 +7,27 @@ SPDX-License-Identifier: Apache-2.0
 'use strict';
 
 module.exports = {
-    'name': 'Test-Chain-Local',
+    'name': 'example',
     'type': 'fabric',
     'version': '1.4',
     'db': 'leveldb',
     'mode': 'bare',
     'consensus': 'solo',
     'ordererOrg': {
-        'name': 'orderer-org',
+        'name': 'orderer',
         'ca': {
-            'name': 'orderer-ca',
+            'name': 'ca0',
             'ip': '127.0.0.1'
         },
         'orderer': [{
-            'name': 'orderer1',
+            'name': 'orderer0',
             'ip': '127.0.0.1'
         }]
     },
     'peerOrgs': [{
-        'name': 'peer-org1',
+        'name': 'org1',
         'ca': {
-            'name': 'peer0-ca',
+            'name': 'ca1',
             'ip': '127.0.0.1'
         },
         'peers': [{
@@ -37,6 +37,6 @@ module.exports = {
     }],
     'channel': {
         'name': 'mychannel',
-        'orgs': ['peer-org1']
+        'orgs': ['org1']
     }
 };

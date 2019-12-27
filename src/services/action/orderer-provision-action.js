@@ -14,13 +14,8 @@ module.exports = class OrdererProvisionAction extends Action {
 
     async execute() {
         let params = this.context.get(this.registry.CONTEXT.PARAMS);
-        let configuration = {
-            domainName: utils.generateDomainName(params.name),
-        };
+        let configuration = {};
         utils.extend(configuration, params);
-        if (this.isDebugMode) {
-            configuration.ordererPort = utils.generateRandomHttpPort();
-        }
         return await OrderService.create(configuration);
     }
 

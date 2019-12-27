@@ -11,11 +11,11 @@ const config = require('../../env');
 const images = require('../../images');
 const common = require('../../libraries/common');
 const CredentialHelper = require('./tools/credential-helper');
-const CryptoCaService = require('./tools/crypto-ca');
 const DbService = require('../db/dao');
 const Client = require('../transport/client');
 const etcdctl = require('../coredns/etcdctl');
 const CAdvisorService = require('./cadvisor');
+const CaClient = require('./ca/client');
 
 module.exports = class OrdererService {
 
@@ -32,21 +32,27 @@ module.exports = class OrdererService {
 
         const org = await DbService.findOrganizationById(organizationId);
         const consortium = await DbService.getConsortiumById(org.consortium_id);
-        const ordererName = `${params.name}-${host.replace(/\./g, '-')}`;
-        let ordererPort = params.ordererPort;
-        if (!ordererPort) {
-            ordererPort = common.PORT.ORDERER;
+        // const ordererName = `${params.name}-${host.replace(/\./g, '-')}`;
+        const ordererName = params.name;
+        const ordererHostName = `${ordererName}.${org.domain_name}`;
+        let ordererPort = common.PORT.ORDERER;
+        let metricsPort = common.PORT.ORDERER_METRICS;
+        let cfgPath = common.FABRIC_CFG_PATH;
+        if (utils.isStandalone()) {
+            ordererPort = utils.generateRandomHttpPort();
+            metricsPort = utils.generateRandomHttpPort();
+            cfgPath = '/tmp/hyperledger/fabric';
         }
 
-        let cfgPath = process.env.RUN_MODE === common.RUN_MODE.LOCAL ? '/tmp/hyperledger/fabric' : common.FABRIC_CFG_PATH;
         let containerOptions = {
+            consortiumId: org.consortium_id,
             image: images.fabric[consortium.version].orderer,
             cfgPath: `${cfgPath}/${consortium._id}/${org.name}/peers/${ordererName}`,
             workDir: `${common.FABRIC_WORKDIR}/orderer`,
-            ordererName,
-            domainName: org.domain_name,
+            hostname: ordererHostName,
             mspId: org.msp_id,
             port: ordererPort,
+            metricsPort: metricsPort,
             enableTls: config.tlsEnabled,
             logLevel: config.fabricLogLevel
         };
@@ -67,12 +73,27 @@ module.exports = class OrdererService {
         const container = await client.createContainer(parameters);
         await utils.wait(`${common.PROTOCOL.TCP}:${host}:${ordererPort}`);
         if (container) {
-            await etcdctl.createZone(`${ordererName}.${org.domain_name}`, host);
+            if (!utils.isStandalone()) {
+                await etcdctl.createZone(org.consortium_id, ordererHostName, host);
+                if (utils.metricsEnabled()) {
+                    await CAdvisorService.registerFabricService({
+                        host: host,
+                        name: common.NODE_TYPE_ORDERER,
+                        port: common.PORT.ORDERER_METRICS
+                    });
+                }
+            }
 
-            await CAdvisorService.registerFabricService({
-                host: host,
-                name: common.NODE_TYPE_ORDERER,
-                port: common.PORT.ORDERER_METRICS
+            await DbService.addCertAuthority({
+                enroll_id: ordererDto.enrollment.enrollmentID,
+                enroll_secret: ordererDto.enrollment.enrollmentSecret,
+                role: HFCAIdentityType.ORDERER,
+                keystore: ordererDto.adminKey,
+                signcerts: ordererDto.signcerts,
+                orgId: organizationId,
+                consortiumId: consortium._id,
+                profile: 'ca',
+                isRoot: false,
             });
 
             return await DbService.addOrderer(Object.assign({}, ordererDto, {
@@ -113,34 +134,36 @@ module.exports = class OrdererService {
     }
 
     static async prepareCerts(org, consortium, ordererName) {
-        const ca = await DbService.findCertAuthorityByOrg(org._id);
-        const ordererAdminUser = {
+        const orgMgr = await DbService.findCertAuthority({
+            org_id: org._id,
+            role: HFCAIdentityType.CLIENT,
+            is_root: false,
+        });
+        const adminUser = {
             enrollmentID: `${ordererName}.${org.domain_name}`,
             enrollmentSecret: `${ordererName}pw`,
         };
-        const options = {
-            caName: ca.name,
-            orgName: org.name,
-            url: ca.url,
-            adminUser: ordererAdminUser
-        };
-        const caService = new CryptoCaService(options);
-        await caService.bootstrapUserEnrollement();
-        await caService.registerAdminUser(HFCAIdentityType.ORDERER);
-        const mspInfo = await caService.enrollUser(ordererAdminUser);
-        const tlsInfo = await caService.enrollUser(Object.assign({}, ordererAdminUser, {profile: 'tls'}));
+        let caClient = new CaClient({url: org.url, caName: org.caname});
+        let mgr = await caClient.enroll(orgMgr.enrollment_id, orgMgr.enrollment_secret, '');
+        await caClient.setRegistrar(orgMgr.enrollment_id, org.msp_id, mgr);
+        await caClient.registerRole(adminUser.enrollmentID, adminUser.enrollmentSecret, HFCAIdentityType.ORDERER,
+            org.domain_name.split(common.SEPARATOR_DOT).reverse().join(common.SEPARATOR_DOT),
+            [{name: 'role', value: 'orderer:ecert'}]);
+        let mspInfo = await caClient.enroll(adminUser.enrollmentID, adminUser.enrollmentSecret, '');
+        let tlsInfo = await caClient.enroll(adminUser.enrollmentID, adminUser.enrollmentSecret, 'tls');
         const ordererDto = {
             orgName: org.name,
             name: ordererName,
             consortiumId: String(consortium._id),
-            tls: {}
+            tls: {},
+            enrollment: adminUser
         };
         ordererDto.adminKey = mspInfo.key.toBytes();
-        ordererDto.adminCert = org.admin_cert;
+        ordererDto.adminCert = mgr.certificate;
         ordererDto.signcerts = mspInfo.certificate;
-        ordererDto.rootCert = org.root_cert;
-        ordererDto.tlsRootCert = org.root_cert;
-        ordererDto.tls.cacert = org.root_cert;
+        ordererDto.rootCert = mspInfo.rootCertificate;
+        ordererDto.tlsRootCert = tlsInfo.rootCertificate;
+        ordererDto.tls.cacert = tlsInfo.rootCertificate;
         ordererDto.tls.key = tlsInfo.key.toBytes();
         ordererDto.tls.cert = tlsInfo.certificate;
         ordererDto.credentialsPath = await CredentialHelper.storePeerCredentials(ordererDto);

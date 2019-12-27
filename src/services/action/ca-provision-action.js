@@ -8,11 +8,9 @@ SPDX-License-Identifier: Apache-2.0
 
 const Action = require('./action');
 const utils = require('../../libraries/utils');
-const common = require('../../libraries/common');
 const OrganizationService = require('../fabric/organization');
 
 module.exports = class CAProvisionAction extends Action {
-
     constructor() {
         super();
     }
@@ -24,14 +22,8 @@ module.exports = class CAProvisionAction extends Action {
             name: params.orgName,
             type: params.type,
             consortiumId: params.consortiumId.toString(),
-            domainName: utils.generateDomainName(params.orgName),
-            caPort: common.PORT.CA
         };
         utils.extend(options, params.caNode);
-        if (this.isDebugMode) {
-            options.caPort = utils.generateRandomHttpPort();
-        }
         return await OrganizationService.create(options);
     }
-
 };

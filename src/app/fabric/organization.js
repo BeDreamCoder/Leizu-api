@@ -7,8 +7,6 @@ SPDX-License-Identifier: Apache-2.0
 'use strict';
 
 const fs = require('fs');
-const path = require('path');
-const utils = require('../../libraries/utils');
 const common = require('../../libraries/common');
 const DbService = require('../../services/db/dao');
 const OrganizationService = require('../../services/fabric/organization');
@@ -18,6 +16,7 @@ const archiver = require('archiver');
 const {BadRequest} = require('../../libraries/error');
 const Validator = require('../../libraries/validator/validator');
 const Schema = require('../../libraries/validator/schema/organization-shcema');
+const PeerService = require('../../services/fabric/peer');
 
 router.get('/:consortiumId', async ctx => {
     let channelId = ctx.query['channelId'];
@@ -134,6 +133,51 @@ router.post('/', async ctx => {
             uuid: organization.uuid,
             date: organization.date
         }, common.SUCCESS);
+    } catch (err) {
+        ctx.status = 400;
+        ctx.body = common.error({}, err.message);
+    }
+});
+
+router.post('/invite', async ctx => {
+    let params = ctx.request.body;
+    let {org,peers,mode} = ctx.request.body;
+    let res;
+    if (mode === common.RUNMODE_CLOUD) {
+        res = Validator.JoiValidate('invite', params, Schema.cloudInviteOrganizationSchema);
+    } else {
+        res = Validator.JoiValidate('invite', params, Schema.bareInviteOrganizationSchema);
+    }
+    if (!res.result) throw new BadRequest(res.errMsg);
+    let user = ctx.currentUser;
+    org.consortiumId = user.consortiumIDs[0].toString();
+    org.userId = user._id;
+    try{
+        let peerResults= [];
+        org.mode = mode;
+        org = await OrganizationService.handleAlicloud(org);
+        let organization = await OrganizationService.create(org);
+        peers = await PeerService.handleAlicloud(mode, organization._id, peers);
+        for (let item of peers) {
+            item.organizationId = organization._id;
+            let peer = await PeerService.create(item);
+            let result = {
+                name:peer.name,
+                location:peer.location,
+                org_id:peer.org_id,
+                consortium_id:peer.consortium_id
+            };
+            peerResults.push(result);
+        }
+        res = {
+            org:{
+                name:organization.name,
+                domain_name:organization.domain_name,
+                user_id:organization.user_id
+            },
+            peers:peerResults
+        };
+        ctx.body = common.success(res,common.SUCCESS);
     } catch (err) {
         ctx.status = 400;
         ctx.body = common.error({}, err.message);

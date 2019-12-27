@@ -35,7 +35,6 @@ module.exports = class RequestHelper {
             orderer.orgName = ordererOrg.name;
             orderer.type = common.PEER_TYPE_ORDER;
             orderer.caName = ordererOrg.ca.name;
-            orderer.caUrl = stringUtil.getUrl(common.PROTOCOL.HTTP, ordererOrg.ca.ip, common.PORT.CA);
             orderer.caNode = {
                 host: ordererOrg.ca.ip,
                 username: ordererOrg.ca.ssh_username,
@@ -64,7 +63,6 @@ module.exports = class RequestHelper {
                 peer.orgName = item.name;
                 peer.type = common.PEER_TYPE_PEER;
                 peer.caName = item.ca.name;
-                peer.caUrl = stringUtil.getUrl(common.PROTOCOL.HTTP, item.ca.ip, common.PORT.CA);
                 peer.caNode = {
                     host: item.ca.ip,
                     username: item.ca.ssh_username,

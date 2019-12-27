@@ -62,7 +62,7 @@ router.post('/', async ctx => {
         var eventPromises = [];
         for (let item of peers) {
             // run metrics server
-            if (process.env.RUN_MODE === common.RUN_MODE.REMOTE) {
+            if (!utils.isStandalone() && utils.metricsEnabled()) {
                 let cadvisorItem = {
                     host: item.host,
                     username: item.username,

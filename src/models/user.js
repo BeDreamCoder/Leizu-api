@@ -13,7 +13,9 @@ const userSchema = new mongoose.Schema({
     password: String,
     role_id: mongoose.Schema.ObjectId,
     date: Date,
-    token: String
+    token: String,
+    consortiumIDs:[mongoose.Schema.ObjectId],
+    org_name: String
 });
 
 module.exports = mongoose.model('User', userSchema, 'user');

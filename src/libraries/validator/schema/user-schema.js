@@ -20,3 +20,18 @@ module.exports.resetSchema = Joi.object().options({abortEarly: false}).keys({
     password: passwordSchema,
     newPassword: passwordSchema.valid(Joi.ref('password')).options({language: {any: {allowOnly: 'must match password'}}})
 });
+
+module.exports.registerSchema = Joi.object().options({abortEarly: false}).keys({
+    username: userNameSchema,
+    password: passwordSchema,
+    repassword: passwordSchema,
+    orgName: Joi.string().min(4).max(255).required(),
+    inviteCode: Joi.string().regex(/^[a-zA-Z0-9]{6}$/)
+});
+
+module.exports.createInvite = Joi.object().keys({
+    name: Joi.string().min(4).max(255).required(),
+    contactname:Joi.string().min(4).max(255).required(),
+    consortium_id:Joi.string().min(4).max(255).required(),
+    channel_id:Joi.string().min(4).max(255).required()
+});

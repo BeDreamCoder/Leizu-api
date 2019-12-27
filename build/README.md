@@ -12,7 +12,6 @@ dns service
 cd coredns
 docker-compose up -d
 ```
-Note: 53/tcp、53/udp must open!
 
 ## efk
 log query service

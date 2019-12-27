@@ -104,3 +104,72 @@ LoginError:
           message:
             type: string
             example: UserName field is required
+InviteOrganization:
+  type: object
+  properties:
+    name:
+      type: string
+      example: Microsoft
+    contactname:
+      type: string
+      example: Bill Gates
+    consortium_id:
+      type: string
+      example: 5dfc78340db6292a104b010e
+    channel_id:
+      type: string
+        example: 5dfc785a0db6292a104b0116
+InviteResponse:
+  type: object
+  properties:
+    uuid:
+      type: string
+      example: 0bcf4501-b4bb-49ad-a3a9-04e17b5224f4
+    name:
+      type: string
+      example: Microsoft
+    contactname:
+      type: string
+      example: Bill Gates
+    inviteCode:
+      type: string
+      example: e5Vh1f
+    status:
+      type: string
+      example: unused
+    consortiumId:
+      type: string
+      example: 5dfc78340db6292a104b010e
+Register:
+  type: object
+  properties:
+    inviteCode:
+      type: string
+      example: e5Vh1f
+    username:
+      type: string
+      example: admin
+    password:
+      type: string
+      example: passw0rd
+    repassword:
+      type: string
+      example: passw0rd
+    orgName:
+      type: string
+      example: Microsoft
+RegisterResponse:
+  type: object
+  properties:
+    uuid:
+      type: string
+      example: 0bcf4501-b4bb-49ad-a3a9-04e17b5224f4
+    username:
+      type: string
+      example: admin
+    password:
+      type: string
+      example: b3af409bb8423187c75e6c7f5b683908
+    org_name:
+      type: string
+      example: oracle

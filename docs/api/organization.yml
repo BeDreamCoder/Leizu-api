@@ -38,3 +38,68 @@ Error:
           message:
             type: string
             example: Token Expired
+Inivte:
+  type: object
+  properties:
+    mode:
+      type: string
+      example: bare
+    org:
+      type: object
+      properties:
+        name:
+          type: string
+          example: invite-org-local
+        domainName:
+          type: string
+          example: invite-org
+        host:
+          type: string
+          example: 127.0.0.1
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: adminpwd
+        port:
+          type: string
+          example: 8080
+        enrollementID:
+          type: string
+          example:
+            enrollement
+        enrollmentSecret:
+          type: string
+          example:
+            enrollpaswrd
+    peers:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            example: invite-peer-local
+          host:
+            type: string
+            example: 127.0.0.1
+          username:
+            type: string
+            example: admin
+          password:
+            type: string
+            example: adminpwd
+          port:
+            type: string
+            example: 8080
+          enrollementID:
+            type: string
+            example:
+              enrollpeer
+          enrollmentSecret:
+            type: string
+            example:
+              enrollpaswrd
+
+

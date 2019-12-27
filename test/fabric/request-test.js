@@ -14,8 +14,8 @@ supertest(app.callback())
     .post('/api/v1/request')
     .set('x-request-from', 'BaaS')
     .send(request)
-    .end(function(err, response){
-        if(err) console.error(err);
+    .end(function (err, response) {
+        if (err) console.error(err);
         console.log(response.body);
         app.mongoose.disconnect();
     });
